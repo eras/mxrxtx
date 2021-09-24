@@ -1,0 +1,26 @@
+[package]
+name = "mxrxtx"
+version = "0.1.0"
+authors = ["Erkki Seppälä <erkki.seppala@vincit.fi>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.44"
+atomicwrites = "0.3.0"
+clap = "3.0.0-beta.2" #_FOR_WINDOWS clap = { version = "3.0.0-beta.2", features = ["std", "suggestions", "derive", "cargo"], default-features = false, optional = false }
+directories-next = "2.0.0"
+log = "0.4.14"
+log4rs = "1.0.0"
+matrix-sdk = "0.4.1"
+ruma-identifiers = "0.20.0"
+serde = "1.0.130"
+serde_derive = "1.0.130"
+termion = "1.5.6"
+thiserror = "1.0.29"
+tokio = "1.12.0"
+toml = "0.5.8"
+url = "2.2.2"
+webrtc = { git = "https://github.com/webrtc-rs/webrtc" }
+
+[build-dependencies]
+vergen = "3"
