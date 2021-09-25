@@ -1,5 +1,5 @@
 use directories_next::ProjectDirs;
-use mxrxtx::{config, version::get_version, setup};
+use mxrxtx::{config, version::get_version, setup, offer};
 use std::path::Path;
 
 use thiserror::Error;
@@ -31,6 +31,9 @@ pub enum Error {
 
     #[error(transparent)]
     SetupError(#[from] setup::Error),
+
+    #[error(transparent)]
+    OfferError(#[from] offer::Error),
 }
 
 fn init_logging(enable: bool) -> Result<(), LoggingSetupError> {
@@ -159,6 +162,15 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     if args.is_present("setup") {
 	setup::setup_mode(args, config, &config_file).await?
+    } else if args.is_present("download") {
+    } else if args.is_present("offer") {
+	let args: Vec<String> = args.values_of_t("offer").expect("clap arguments should ensure this");
+	let room = &args[0];
+	let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
+	println!("files: {:?}", files);
+	offer::offer(config, room, files).await?;
+    } else {
+	panic!("Clap group should ensure at least one of these is set..");
     }
 
     Ok(())
