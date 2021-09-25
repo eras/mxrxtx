@@ -135,6 +135,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .long("download")
                 .takes_value(true)
                 .multiple_values(true)
+                .min_values(1)
                 .about("Download files offered by a given Matrix event, given as a matrix: or https://matrix.to url"),
         )
         .arg(
@@ -143,8 +144,12 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .long("offer")
                 .takes_value(true)
                 .multiple_values(true)
+                .min_values(2)
                 .about("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
         )
+	.group(clap::ArgGroup::new("mode")
+               .args(&["offer", "download", "setup"])
+               .required(true))
         .get_matches();
 
     init_logging(args.is_present("debug"))?;
