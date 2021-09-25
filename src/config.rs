@@ -1,4 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -9,7 +10,8 @@ use thiserror::Error;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct Config {
     pub user_id: String, // @user_id:server
-    pub token: String,
+    pub access_token: String,
+    pub device_id: String,
 }
 
 #[derive(Error, Debug)]
@@ -43,6 +45,9 @@ pub enum Error {
 
     #[error("Cannot determine default host: {}", .0)]
     DefaultHostError(String),
+
+    #[error(transparent)]
+    RumaIdentifierError(#[from] ruma_identifiers::Error),
 }
 
 pub static FILENAME: &str = "mxrxtx.ini";
@@ -85,6 +90,17 @@ impl Config {
         log::info!("Wrote config to {}", filename);
         Ok(())
     }
+
+    pub fn get_matrix_session(&self) -> Result<matrix_sdk::Session, Error> {
+        let user_id = matrix_sdk::ruma::UserId::try_from(self.user_id.clone())?;
+        let device_id = Box::<matrix_sdk::ruma::DeviceId>::try_from(self.device_id.clone())
+            .expect("infallible");
+        Ok(matrix_sdk::Session {
+            access_token: self.access_token.clone(),
+            user_id,
+            device_id,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -95,7 +111,7 @@ mod tests {
     fn test_save() {
         let mut config = Config::new();
         config.user_id = "user_id".to_string();
-        config.token = "token".to_string();
+        config.access_token = "access_token".to_string();
         config.save("test.ini").unwrap();
     }
 }

@@ -68,10 +68,9 @@ pub async fn setup_mode(_args: clap::ArgMatches,
 			     None,
 			     Some(&device_name.unwrap_or("mxrxtx".to_string()))).await?;
 
-    let access_token = login.access_token;
-
     config.user_id = user_id.to_string();
-    config.token = access_token;
+    config.access_token = login.access_token;
+    config.device_id = login.device_id.to_string();
     config.save(&config_file)?;
 
     println!("Login successful. Saved configuration to {}", config_file);

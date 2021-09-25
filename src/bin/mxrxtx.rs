@@ -99,6 +99,7 @@ fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
 async fn main() -> Result<(), Error> {
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
+	.license("MIT")
         .version(get_version().as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about("Transfer files over Matrix, directly from client to client with WebRTC.")
