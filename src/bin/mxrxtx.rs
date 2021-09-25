@@ -102,7 +102,10 @@ async fn main() -> Result<(), Error> {
 	.license("MIT")
         .version(get_version().as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
-        .about("Transfer files over Matrix, directly from client to client with WebRTC.")
+        .about("Transfer files over Matrix, directly from client to client with WebRTC.
+
+Licensed under the MIT license; refer to LICENSE.MIT for details.
+")
         .arg(
             clap::Arg::new("config")
                 .long("config")
