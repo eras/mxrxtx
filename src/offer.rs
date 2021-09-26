@@ -154,8 +154,7 @@ pub async fn offer(config: config::Config,
         MessageEventContent::new(content)
     );
 
-    let txn_id = Uuid::new_v4();
-    let event_id = room.send(content, Some(txn_id)).await?.event_id;
+    let event_id = room.send(content, Some(Uuid::new_v4())).await?.event_id;
 
     println!("Offer started; press ctrl-c to redact");
     let ctrl_c = tokio::signal::ctrl_c();
@@ -203,8 +202,7 @@ pub async fn offer(config: config::Config,
     }
 
     println!("Redacting offer");
-    let txn_id = Uuid::new_v4();
-    room.redact(&event_id, Some("Offer expired"), Some(txn_id)).await?;
+    room.redact(&event_id, Some("Offer expired"), Some(Uuid::new_v4())).await?;
     println!("Done");
 
     Ok(())
