@@ -132,7 +132,17 @@ pub async fn offer(config: config::Config,
 
     let event_id = room.send(content, Some(Uuid::new_v4())).await?.event_id;
 
-    println!("Offer started; press ctrl-c to redact");
+    let uri =
+	matrix_uri::MatrixUri::new(
+            matrix_uri::MatrixId::new(matrix_uri::IdType::RoomId, String::from(room.room_id().as_str())),
+            Some(matrix_uri::MatrixId::new(matrix_uri::IdType::EventId, String::from(event_id.clone()))),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+    println!("Offer for {} started; press ctrl-c to redact", uri.matrix_uri_string());
     let ctrl_c = tokio::signal::ctrl_c();
 
     let mut empty_room_event_filter = filter::RoomEventFilter::empty();
