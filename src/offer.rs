@@ -1,13 +1,11 @@
-use crate::{config, matrix_common};
-use matrix_sdk::uuid::Uuid;
-use ruma::api::client::r0::{filter, sync::sync_events};
-use ruma_events::{room::message::MessageEventContent, AnyMessageEventContent};
+use crate::{config, matrix_common, protocol};
+use matrix_sdk::config::SyncSettings;
+use matrix_sdk::Client;
+use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
-
-const EVENT_TYPE_OFFER: &str = "fi.variaattori.direct_transfer.offer";
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -34,6 +32,12 @@ pub enum Error {
 
     #[error("Room id/name must start with either ! or #: {}", .0)]
     RoomNameError(String),
+
+    #[error(transparent)]
+    MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
+
+    #[error(transparent)]
+    IdParseError(#[from] ruma::IdParseError),
 }
 
 enum RoomType {
@@ -56,25 +60,37 @@ impl RoomType {
 
 #[rustfmt::skip::macros(select)]
 pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
+    dbg!();
     let session = config.get_matrix_session()?;
-    let client = matrix_sdk::Client::new_from_user_id(session.user_id.clone()).await?;
+    dbg!();
+    let client = Client::builder()
+        .server_name(session.user_id.server_name())
+        .build()
+        .await?;
+    dbg!();
     client.restore_login(session).await?;
+    dbg!();
 
-    let rooms = matrix_common::get_joined_rooms(&client).await?;
-    println!("rooms: {:?}", rooms);
     let room = match RoomType::classify(room)? {
-        RoomType::RoomId => client
-            .get_joined_room(&ruma::RoomId::try_from(room)?)
-            .ok_or(Error::NoSuchRoomError(String::from(room)))?,
+        RoomType::RoomId => {
+            let room_id = <&matrix_sdk::ruma::RoomId>::try_from(room)?.to_owned();
+            client
+                .get_joined_room(&room_id)
+                .ok_or(Error::NoSuchRoomError(String::from(room)))?
+        }
         RoomType::RoomName => {
+            dbg!();
+            let rooms = matrix_common::get_joined_rooms(&client).await?;
+            println!("rooms: {:?}", rooms);
+            dbg!();
+            let room_alias = client
+                .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
+                .await
+                .unwrap();
+            dbg!();
             let matching: Vec<&matrix_sdk::room::Joined> = rooms
                 .iter()
-                .filter(|&joined_room| {
-                    println!("canonical alias: {:?}", joined_room.canonical_alias());
-                    joined_room
-                        .canonical_alias()
-                        .map_or(false, |x| x.alias() == room)
-                })
+                .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)
                 .collect();
             if matching.len() == 1 {
                 matching[0].clone()
@@ -87,55 +103,25 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     };
     println!("room: {:?}", room);
 
-    type JsonObject = serde_json::Map<String, serde_json::Value>;
-    type JsonArray = Vec<serde_json::Value>;
-
-    use serde_json::Value::{Object, String as JsonString};
-
-    let files_offer: JsonArray = files
+    let files: Vec<protocol::File> = files
         .iter()
-        .map(|file| {
-            let obj: JsonObject = vec![
-                ("name".to_string(), JsonString(file.to_string())),
-                (
-                    "content_type".to_string(),
-                    JsonString("application/octet-stream".to_string()),
-                ),
-                (
-                    "size".to_string(),
-                    serde_json::Value::Number(serde_json::Number::from(0u64)),
-                ),
-            ]
-            .into_iter()
-            .collect();
-            Object(obj)
+        .map(|file| protocol::File {
+            name: file.to_string(),
+            content_type: String::from("application/octet-stream"),
+            size: 0u64,
         })
         .collect();
 
-    let data: JsonObject = vec![
-        //("name".to_string(), JsonString(files.clone().join(", ").to_string())),
-        (
-            "files".to_string(),
-            serde_json::Value::Array(files_offer.clone()),
-        ),
-    ]
-    .into_iter()
-    .collect();
-    let data: JsonObject = vec![
-        (
-            "body".to_string(),
-            JsonString(format!("File offer: {}", files.clone().join(", "))),
-        ),
-        ("data".to_string(), Object(data)),
-    ]
-    .into_iter()
-    .collect();
+    let offer = protocol::OfferContent { files: files };
 
-    let content = ruma_events::room::message::MessageType::new(EVENT_TYPE_OFFER, data).unwrap(); // should work always
+    // let content = ruma_events::room::message::MessageType::new(EVENT_TYPE_OFFER, data).unwrap(); // should work always
 
-    let content = AnyMessageEventContent::RoomMessage(MessageEventContent::new(content));
+    // let content = RoomMessageEventContent::new(content);
 
-    let event_id = room.send(content, Some(Uuid::new_v4())).await?.event_id;
+    let event_id = room
+        .send(offer, Some(&ruma::TransactionId::new()))
+        .await?
+        .event_id;
 
     let uri = matrix_uri::MatrixUri::new(
         matrix_uri::MatrixId::new(
@@ -144,7 +130,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         ),
         Some(matrix_uri::MatrixId::new(
             matrix_uri::IdType::EventId,
-            String::from(event_id.clone()),
+            String::from(event_id.as_str()),
         )),
         None,
         None,
@@ -175,8 +161,8 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     filter_def.room.timeline = empty_room_event_filter.clone();
     filter_def.room.ephemeral = empty_room_event_filter.clone();
     filter_def.room.state = empty_room_event_filter.clone();
-    let sync_settings = matrix_sdk::SyncSettings::default()
-        .filter(sync_events::Filter::FilterDefinition(filter_def))
+    let sync_settings = SyncSettings::default()
+        .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
         .timeout(Duration::from_millis(1000))
         .full_state(true);
     select! {
@@ -203,8 +189,12 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     }
 
     println!("Redacting offer");
-    room.redact(&event_id, Some("Offer expired"), Some(Uuid::new_v4()))
-        .await?;
+    room.redact(
+        &event_id,
+        Some("Offer expired"),
+        Some(ruma::TransactionId::new()),
+    )
+    .await?;
     println!("Done");
 
     Ok(())

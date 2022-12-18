@@ -1,8 +1,6 @@
 use crate::{config, matrix_common, protocol};
-use matrix_sdk::uuid::Uuid;
-use ruma_client_api::r0::{room::get_room_event, to_device::send_event_to_device};
-use std::convert::TryFrom;
-use std::str::FromStr;
+use matrix_sdk::Client;
+use ruma_client_api::to_device::send_event_to_device;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -39,6 +37,12 @@ pub enum Error {
 
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
+
+    #[error(transparent)]
+    IdParseError(#[from] ruma::IdParseError),
 }
 
 #[derive(Error, Debug)]
@@ -52,81 +56,98 @@ impl std::fmt::Display for MatrixUriParseError {
 
 pub async fn download(config: config::Config, urls: Vec<&str>) -> Result<(), Error> {
     let session = config.get_matrix_session()?;
-    let client = matrix_sdk::Client::new_from_user_id(session.user_id.clone()).await?;
+    let client = Client::builder()
+        .server_name(session.user_id.server_name())
+        .build()
+        .await?;
     client.restore_login(session).await?;
 
-    let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(|x| MatrixUriParseError(x))?;
-    let room_id = match uri.mxid.id_type {
-        matrix_uri::IdType::RoomId => &uri.mxid.body,
-        _ => {
-            return Err(Error::MatrixUriIsNotRoomIdError(format!(
-                "{:?}",
-                uri.mxid.id_type
-            )))
-        }
-    };
-    let event_id = match uri.child_mxid {
-        Some(child_mxid) => match child_mxid.id_type {
-            matrix_uri::IdType::EventId => {
-                ruma_identifiers::EventId::try_from(child_mxid.body.clone())?
-            }
-            _ => {
-                return Err(Error::MatrixUriMissingEventIdError(format!(
-                    "{:?}",
-                    child_mxid.id_type
-                )))
-            }
-        },
-        _ => {
-            return Err(Error::MatrixUriMissingEventIdError(format!(
-                "{:?}",
-                uri.mxid.id_type
-            )))
-        }
-    };
+    // let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(|x| MatrixUriParseError(x))?;
+    // let room_id = match uri.mxid.id_type {
+    //     matrix_uri::IdType::RoomId => &uri.mxid.body,
+    //     _ => {
+    //         return Err(Error::MatrixUriIsNotRoomIdError(format!(
+    //             "{:?}",
+    //             uri.mxid.id_type
+    //         )))
+    //     }
+    // };
+    // let event_id = match uri.child_mxid {
+    //     Some(child_mxid) => match child_mxid.id_type {
+    //         matrix_uri::IdType::EventId => {
+    //             <&ruma_identifiers::EventId>::try_from(child_mxid.body.as_str())?.to_owned()
+    //         }
+    //         _ => {
+    //             return Err(Error::MatrixUriMissingEventIdError(format!(
+    //                 "{:?}",
+    //                 child_mxid.id_type
+    //             )))
+    //         }
+    //     },
+    //     _ => {
+    //         return Err(Error::MatrixUriMissingEventIdError(format!(
+    //             "{:?}",
+    //             uri.mxid.id_type
+    //         )))
+    //     }
+    // };
 
     // needed to populate Client internal data
     let _rooms = matrix_common::get_joined_rooms(&client).await?;
-    let room = client
-        .get_joined_room(&ruma::RoomId::try_from(room_id.as_str())?)
-        .ok_or(Error::NoSuchRoomError(String::from(room_id)))?;
+    // let room_id = <&matrix_sdk::ruma::RoomId>::try_from(room_id.as_str())?.to_owned();
+    // let room = client
+    //     .get_joined_room(&room_id)
+    //     .ok_or(Error::NoSuchRoomError(String::from(room_id.as_str())))?;
 
-    let event = room
-        .event(get_room_event::Request::new(room.room_id(), &event_id))
-        .await?;
-    let user_id = match event.event.deserialize()? {
-        ruma_events::AnyRoomEvent::Message(ruma_events::AnyMessageEvent::RoomMessage(
-            message_event,
-        )) => message_event.sender,
-        _ => return Err(Error::NotAMessageEventError(event_id.as_str().to_string())),
-    };
+    // let event = room
+    //     .event(get_room_event::Request::new(room.room_id(), &event_id))
+    //     .await?;
+    // let user_id = match event.event.deserialize()? {
+    //     ruma_events::AnyRoomEvent::Message(ruma_events::AnyMessageEvent::RoomMessage(
+    //         message_event,
+    //     )) => message_event.sender,
+    //     _ => return Err(Error::NotAMessageEventError(event_id.as_str().to_string())),
+    // };
 
-    println!("event: {:?}", event);
+    let user_id = client
+        .user_id()
+        .expect("User id should be set at this point");
 
-    let txn_id = Uuid::new_v4().to_string();
-    let txn_id = txn_id.as_str();
+    // let user_id = <&ruma_identifiers::UserId>::try_from(user_id.as_str())?;
+    // let user_id = (<ruma_common::UserId>::try_from(user_id)).to_owned();
+
+    let user_id = ruma_common::UserId::parse(user_id.as_str())?;
+
+    // println!("event: {:?}", event);
+
+    let txn_id = ruma::TransactionId::new();
+    use ruma::events::AnyToDeviceEventContent;
+    use ruma::serde::Raw;
     use ruma_common::to_device::DeviceIdOrAllDevices;
-    use ruma_events::AnyToDeviceEventContent;
-    use ruma_serde::Raw;
     use std::collections::BTreeMap;
     type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
-    let mut messages = send_event_to_device::Messages::new();
+    let mut messages = send_event_to_device::v3::Messages::new();
     let all = DeviceIdOrAllDevices::AllDevices;
 
-    let establish_session = protocol::MxrxtxEvent::RequestSession(protocol::SessionInfo {
-        event_id: event_id.clone(),
-        webrtc_ice: String::from("moi"),
-    });
+    //event_id: Box::new(event_id.clone()),
+    let establish_session = protocol::RequestSessionContent {
+        session_info: protocol::SessionInfo {
+            webrtc_ice: String::from("moi"),
+        },
+    };
 
     let establish_session_event: Raw<AnyToDeviceEventContent> =
-        ruma_serde::Raw::from_json(serde_json::value::to_raw_value(&establish_session)?);
+        Raw::from_json(serde_json::value::to_raw_value(&establish_session)?);
 
-    let foos: Foo = vec![(all, establish_session_event)].into_iter().collect();
+    let values: Foo = vec![(all, establish_session_event)].into_iter().collect();
 
-    messages.insert(user_id, foos);
-    let x =
-        send_event_to_device::Request::new_raw("fi.variaattori.mxrxtx.session", txn_id, messages);
-    client.send(x, None).await?;
+    messages.insert(user_id, values);
+    let request = send_event_to_device::v3::Request::new_raw(
+        "fi.variaattori.mxrxtx.session",
+        &txn_id,
+        messages,
+    );
+    client.send(request, None).await?;
 
     Ok(())
 }

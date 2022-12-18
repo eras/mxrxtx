@@ -12,6 +12,7 @@ pub struct Config {
     pub user_id: String, // @user_id:server
     pub access_token: String,
     pub device_id: String,
+    pub refresh_token: Option<String>,
 }
 
 #[derive(Error, Debug)]
@@ -48,6 +49,9 @@ pub enum Error {
 
     #[error(transparent)]
     RumaIdentifierError(#[from] ruma_identifiers::Error),
+
+    #[error(transparent)]
+    IdParseError(#[from] ruma::IdParseError),
 }
 
 pub static FILENAME: &str = "mxrxtx.ini";
@@ -92,13 +96,15 @@ impl Config {
     }
 
     pub fn get_matrix_session(&self) -> Result<matrix_sdk::Session, Error> {
-        let user_id = matrix_sdk::ruma::UserId::try_from(self.user_id.clone())?;
-        let device_id = Box::<matrix_sdk::ruma::DeviceId>::try_from(self.device_id.clone())
-            .expect("infallible");
+        let user_id = <&matrix_sdk::ruma::UserId>::try_from(self.user_id.as_str())?.to_owned();
+        let device_id = <&matrix_sdk::ruma::DeviceId>::try_from(self.device_id.as_str())
+            .expect("infallible")
+            .to_owned();
         Ok(matrix_sdk::Session {
             access_token: self.access_token.clone(),
             user_id,
             device_id,
+            refresh_token: self.refresh_token.clone(),
         })
     }
 }
@@ -112,6 +118,7 @@ mod tests {
         let mut config = Config::new();
         config.user_id = "user_id".to_string();
         config.access_token = "access_token".to_string();
+        config.refresh_token = Some("refresh_token".to_string());
         config.save("test.ini").unwrap();
     }
 }

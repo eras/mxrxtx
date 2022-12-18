@@ -1,4 +1,5 @@
-use ruma::api::client::r0::{filter, sync::sync_events};
+use matrix_sdk::config::SyncSettings;
+use ruma_client_api::{filter, sync::sync_events};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -44,8 +45,8 @@ pub(crate) async fn get_joined_rooms(
     filter_def.room.timeline = empty_room_event_filter.clone();
     filter_def.room.ephemeral = empty_room_event_filter.clone();
     filter_def.room.state = empty_room_event_filter.clone();
-    let sync_settings = matrix_sdk::SyncSettings::default()
-        .filter(sync_events::Filter::FilterDefinition(filter_def))
+    let sync_settings = SyncSettings::default()
+        .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
         .timeout(Duration::from_millis(1000))
         .full_state(true);
     let _sync_response = client.sync_once(sync_settings).await?;
