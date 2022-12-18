@@ -94,7 +94,7 @@ pub async fn offer(
         .filter(sync_events::v3::Filter::FilterDefinition(
             filter_def.clone(),
         ))
-        .timeout(Duration::from_millis(1000))
+        //.timeout(Duration::from_millis(10000))
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
@@ -177,7 +177,7 @@ pub async fn offer(
 
     let sync_settings = SyncSettings::default()
         .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
-        .timeout(Duration::from_millis(1000))
+        .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
     select! {
 	_done = ctrl_c => {
