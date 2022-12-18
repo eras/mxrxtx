@@ -105,7 +105,7 @@ fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
 async fn main() -> Result<(), Error> {
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
-	.license("MIT")
+	.before_help("Licensed under the MIT license")
         .version(get_version().as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about("Transfer files over Matrix, directly from client to client with WebRTC.
@@ -117,7 +117,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .long("config")
                 .short('c')
                 .takes_value(true)
-                .about(
+                .help(
                     format!(
                         "Config file to load, defaults to {}",
                         get_config_file(None)?
@@ -128,12 +128,12 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
         .arg(
             clap::Arg::new("debug")
                 .long("debug")
-                .about(&format!("Enable debug logging to {}", DEBUG_LOG_FILE)),
+		.help(format!("Enable debug logging to {}", DEBUG_LOG_FILE).as_str()),
         )
         .arg(
             clap::Arg::new("setup")
                 .long("setup")
-                .about("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
+                .help("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
         )
         .arg(
             clap::Arg::new("download")
@@ -142,7 +142,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .takes_value(true)
                 .multiple_values(true)
                 .min_values(1)
-                .about("Download files offered by a given Matrix event, given as a matrix: or https://matrix.to url"),
+                .help("Download files offered by a given Matrix event, given as a matrix: or https://matrix.to url"),
         )
         .arg(
             clap::Arg::new("offer")
@@ -151,7 +151,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .takes_value(true)
                 .multiple_values(true)
                 .min_values(2)
-                .about("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
+                .help("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
         )
 	.group(clap::ArgGroup::new("mode")
                .args(&["offer", "download", "setup"])
