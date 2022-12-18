@@ -1,5 +1,5 @@
 use directories_next::ProjectDirs;
-use mxrxtx::{config, version::get_version, setup, offer, download};
+use mxrxtx::{config, download, offer, setup, version::get_version};
 use std::path::Path;
 
 use thiserror::Error;
@@ -164,19 +164,23 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
     let config = config::Config::load(&config_file)?;
 
     if args.is_present("setup") {
-	setup::setup_mode(args, config, &config_file).await?
+        setup::setup_mode(args, config, &config_file).await?
     } else if args.is_present("download") {
-	let args: Vec<String> = args.values_of_t("download").expect("clap arguments should ensure this");
-	let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-	download::download(config, urls).await?;
+        let args: Vec<String> = args
+            .values_of_t("download")
+            .expect("clap arguments should ensure this");
+        let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
+        download::download(config, urls).await?;
     } else if args.is_present("offer") {
-	let args: Vec<String> = args.values_of_t("offer").expect("clap arguments should ensure this");
-	let room = &args[0];
-	let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
-	println!("files: {:?}", files);
-	offer::offer(config, room, files).await?;
+        let args: Vec<String> = args
+            .values_of_t("offer")
+            .expect("clap arguments should ensure this");
+        let room = &args[0];
+        let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
+        println!("files: {:?}", files);
+        offer::offer(config, room, files).await?;
     } else {
-	panic!("Clap group should ensure at least one of these is set..");
+        panic!("Clap group should ensure at least one of these is set..");
     }
 
     Ok(())
