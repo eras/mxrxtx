@@ -1,6 +1,6 @@
 use directories_next::ProjectDirs;
 use mxrxtx::{config, download, offer, setup, version::get_version};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
@@ -66,40 +66,69 @@ fn init_logging(enable: bool) -> Result<(), LoggingSetupError> {
     Ok(())
 }
 
-fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
+fn project_dir() -> Option<ProjectDirs> {
+    ProjectDirs::from("", "Erkki Seppälä", "mxrxtx")
+}
+
+fn get_path_logic<SelectPathFn>(
+    path_arg: Option<&str>,
+    select_path: SelectPathFn,
+) -> Result<String, Error>
+where
+    SelectPathFn: Fn(&ProjectDirs) -> PathBuf,
+{
     let joined_pathbuf;
     let joined_path;
     // argument overrides all automation
-    let config_file: &Path = if let Some(config_file) = config_file_arg {
-        Path::new(config_file)
+    let path: &Path = if let Some(path) = path_arg {
+        Path::new(path)
     } else {
-        let config_file = Path::new(&config::FILENAME);
+        let path = Path::new(&config::FILENAME);
         // does the default config filename exist? if so, go with that
-        let config_file: &Path = if config_file.exists() {
-            config_file
+        let path: &Path = if path.exists() {
+            path
         } else {
             // otherwise, choose the XDG directory if it can be created
-            (if let Some(proj_dirs) = ProjectDirs::from("", "Erkki Seppälä", "mxrxtx") {
-                let config_dir = proj_dirs.config_dir();
-                joined_pathbuf = config_dir.join("mxrxtx.ini");
+            (if let Some(proj_dirs) = project_dir() {
+                joined_pathbuf = select_path(&proj_dirs);
                 joined_path = joined_pathbuf.as_path();
                 Some(&joined_path)
             } else {
                 None
             })
-            .unwrap_or(&config_file)
+            .unwrap_or(&path)
         };
-        config_file
+        path
     };
-    let config_file = if let Some(path) = config_file.to_str() {
+    let path = if let Some(path) = path.to_str() {
         path
     } else {
         return Err(Error::UnsupportedPath(
             "Sorry, unsupported config file path (needs to be legal UTF8)".to_string(),
         ));
     };
-    Ok(config_file.to_string())
+    Ok(path.to_string())
 }
+
+fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
+    get_path_logic(config_file_arg, |project_dirs| {
+        project_dirs.config_dir().join("mxrxtx.ini")
+    })
+}
+
+fn get_state_dir(state_dir_arg: Option<&str>) -> Result<String, Error> {
+    get_path_logic(state_dir_arg, |project_dirs| {
+        project_dirs.cache_dir().into()
+    })
+}
+
+// fn get_state_dir(state_dir_arg: Option<&str>) -> Result<String, Error> {
+//     // The location to save files to
+//     let home = dirs::home_dir()
+//         .expect("no home directory found")
+//         .join("party_bot");
+//     client_builder = client_builder.sled_store(home, None)?;
+// }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -121,6 +150,18 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                     format!(
                         "Config file to load, defaults to {}",
                         get_config_file(None)?
+                    )
+                    .as_str(),
+                ),
+        )
+        .arg(
+            clap::Arg::new("state")
+                .long("state")
+                .takes_value(true)
+                .help(
+                    format!(
+                        "State directory to use, defaults to {}",
+                        get_state_dir(None)?
                     )
                     .as_str(),
                 ),
@@ -163,6 +204,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
     let config_file = get_config_file(args.value_of("config"))?;
     let config = config::Config::load(&config_file)?;
 
+    let state_dir = get_state_dir(args.value_of("state"))?;
+
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
     } else if args.is_present("download") {
@@ -178,7 +221,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
         let room = &args[0];
         let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
         println!("files: {:?}", files);
-        offer::offer(config, room, files).await?;
+        offer::offer(config, &state_dir, room, files).await?;
     } else {
         panic!("Clap group should ensure at least one of these is set..");
     }

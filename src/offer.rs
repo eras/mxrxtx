@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error(transparent)]
     IdParseError(#[from] ruma::IdParseError),
+
+    #[error(transparent)]
+    OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
 }
 
 enum RoomType {
@@ -59,17 +62,48 @@ impl RoomType {
 }
 
 #[rustfmt::skip::macros(select)]
-pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
+pub async fn offer(
+    config: config::Config,
+    state_dir: &str,
+    room: &str,
+    files: Vec<&str>,
+) -> Result<(), Error> {
     dbg!();
     let session = config.get_matrix_session()?;
     dbg!();
+
+    let mut empty_room_event_filter = filter::RoomEventFilter::empty();
+    empty_room_event_filter.limit = Some(From::from(1u32));
+    empty_room_event_filter.rooms = Some(&[]);
+    empty_room_event_filter.lazy_load_options = filter::LazyLoadOptions::Enabled {
+        include_redundant_members: false,
+    };
+
+    let mut no_types_filter = filter::Filter::empty();
+    no_types_filter.types = Some(&[]);
+    let mut filter_def = filter::FilterDefinition::empty();
+    filter_def.presence = no_types_filter.clone();
+    filter_def.account_data = no_types_filter.clone();
+    filter_def.room.include_leave = false;
+    filter_def.room.account_data = empty_room_event_filter.clone();
+    filter_def.room.timeline = empty_room_event_filter.clone();
+    filter_def.room.ephemeral = empty_room_event_filter.clone();
+    filter_def.room.state = empty_room_event_filter.clone();
+
+    let sync_settings = SyncSettings::default()
+        .filter(sync_events::v3::Filter::FilterDefinition(
+            filter_def.clone(),
+        ))
+        .timeout(Duration::from_millis(1000))
+        .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
+        .sled_store(state_dir, None)?
         .build()
         .await?;
-    dbg!();
     client.restore_login(session).await?;
-    dbg!();
+
+    let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
     let room = match RoomType::classify(room)? {
         RoomType::RoomId => {
@@ -79,15 +113,12 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
                 .ok_or(Error::NoSuchRoomError(String::from(room)))?
         }
         RoomType::RoomName => {
-            dbg!();
-            let rooms = matrix_common::get_joined_rooms(&client).await?;
+            let rooms = client.joined_rooms();
             println!("rooms: {:?}", rooms);
-            dbg!();
             let room_alias = client
                 .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
                 .await
                 .unwrap();
-            dbg!();
             let matching: Vec<&matrix_sdk::room::Joined> = rooms
                 .iter()
                 .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)
@@ -144,27 +175,10 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     );
     let ctrl_c = tokio::signal::ctrl_c();
 
-    let mut empty_room_event_filter = filter::RoomEventFilter::empty();
-    empty_room_event_filter.limit = Some(From::from(1u32));
-    empty_room_event_filter.rooms = Some(&[]);
-    empty_room_event_filter.lazy_load_options = filter::LazyLoadOptions::Enabled {
-        include_redundant_members: false,
-    };
-
-    let mut no_types_filter = filter::Filter::empty();
-    no_types_filter.types = Some(&[]);
-    let mut filter_def = filter::FilterDefinition::empty();
-    filter_def.presence = no_types_filter.clone();
-    filter_def.account_data = no_types_filter.clone();
-    filter_def.room.include_leave = false;
-    filter_def.room.account_data = empty_room_event_filter.clone();
-    filter_def.room.timeline = empty_room_event_filter.clone();
-    filter_def.room.ephemeral = empty_room_event_filter.clone();
-    filter_def.room.state = empty_room_event_filter.clone();
     let sync_settings = SyncSettings::default()
         .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
         .timeout(Duration::from_millis(1000))
-        .full_state(true);
+        .token(first_sync_response.next_batch);
     select! {
 	_done = ctrl_c => {
 	    ()

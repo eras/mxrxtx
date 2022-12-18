@@ -55,6 +55,7 @@ pub enum Error {
 }
 
 pub static FILENAME: &str = "mxrxtx.ini";
+pub static STATEDIR: &str = "mxrxtx-state";
 
 impl Config {
     pub fn new() -> Config {
