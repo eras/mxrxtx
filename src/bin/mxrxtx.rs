@@ -213,7 +213,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
             .values_of_t("download")
             .expect("clap arguments should ensure this");
         let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-        download::download(config, urls).await?;
+        download::download(config, &state_dir, urls).await?;
     } else if args.is_present("offer") {
         let args: Vec<String> = args
             .values_of_t("offer")
