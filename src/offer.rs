@@ -1,6 +1,7 @@
 use crate::{config, matrix_common, protocol};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
+use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
 use std::time::Duration;
@@ -103,6 +104,11 @@ pub async fn offer(
         .await?;
     client.restore_login(session).await?;
 
+    let user_id = client
+        .user_id()
+        .expect("User id should be set at this point");
+    let user_id = ruma_common::UserId::parse(user_id.as_str())?;
+
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
     let room = match RoomType::classify(room)? {
@@ -183,21 +189,52 @@ pub async fn offer(
 	_done = ctrl_c => {
 	    ()
 	}
-	_done = client
-	    .sync_with_callback(sync_settings, |response| async move {
-		println!("got: {:?}", response);
-	        // let channel = sync_channel;
+	_done = {
+	    client
+	    .sync_with_callback(sync_settings, |response| async {
+		let mut requested = false;
+                for event in response.to_device.events {
+		    match serde_json::from_str::<protocol::RequestSessionEvent>(event.json().get()) {
+			Ok(value) => {
+			    println!("Cool: {value:?}");
+			    requested = true;
+			}
+			Err(err) => println!("Not cool: {err:?}"),
+		    }
+                }
 
-	        // for (room_id, room) in response.rooms.join {
-	        //     for event in room.timeline.events {
-	        //         channel.send(event).await.unwrap();
-	        //     }
-	        // }
-		// println!("Got sync response {:?}, breaking out", response);
+		if requested {
+		    let accept_session = protocol::RequestSessionEventContent {
+			session_info: protocol::SessionInfo {
+			    webrtc_ice: String::from("heihei"),
+			},
+		    };
+
+		    let accept_session_event: Raw<AnyToDeviceEventContent> =
+			Raw::from_json(serde_json::value::to_raw_value(&accept_session).unwrap());
+
+		    use ruma::events::AnyToDeviceEventContent;
+		    use ruma::serde::Raw;
+		    use ruma_common::to_device::DeviceIdOrAllDevices;
+		    use std::collections::BTreeMap;
+		    let all = DeviceIdOrAllDevices::AllDevices;
+		    let mut messages = send_event_to_device::v3::Messages::new();
+		    type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
+		    let values: Foo = vec![(all, accept_session_event)].into_iter().collect();
+
+		    let txn_id = ruma::TransactionId::new();
+		    messages.insert(user_id.clone(), values);
+		    let request = send_event_to_device::v3::Request::new_raw(
+			"fi.variaattori.mxrxtx.accept_session",
+			&txn_id,
+			messages,
+		    );
+		    client.send(request, None).await.unwrap(); // TODO
+		}
 
 	        // matrix_sdk::LoopCtrl::Break
 	        matrix_sdk::LoopCtrl::Continue
-	}) => {
+	})} => {
 		()
 	    }
     }

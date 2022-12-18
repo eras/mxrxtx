@@ -9,14 +9,14 @@ pub struct SessionInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent)]
-#[ruma_event(type = "fi.variaattori.mxrxtx.request_session", kind = MessageLike)]
-pub struct RequestSessionContent {
+#[ruma_event(type = "fi.variaattori.mxrxtx.request_session", kind = ToDevice)]
+pub struct RequestSessionEventContent {
     pub session_info: SessionInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent)]
-#[ruma_event(type = "fi.variaattori.mxrxtx.accept_session", kind = MessageLike)]
-pub struct AcceptSessionContent {
+#[ruma_event(type = "fi.variaattori.mxrxtx.accept_session", kind = ToDevice)]
+pub struct AcceptSessionEventContent {
     pub session_info: SessionInfo,
 }
 

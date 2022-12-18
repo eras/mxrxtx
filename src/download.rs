@@ -1,7 +1,6 @@
 use crate::{config, matrix_common, protocol};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
-use ruma_client_api::room::get_room_event;
 use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
@@ -160,10 +159,6 @@ pub async fn download(
     let user_id = client
         .user_id()
         .expect("User id should be set at this point");
-
-    // let user_id = <&ruma_identifiers::UserId>::try_from(user_id.as_str())?;
-    // let user_id = (<ruma_common::UserId>::try_from(user_id)).to_owned();
-
     let user_id = ruma_common::UserId::parse(user_id.as_str())?;
 
     // println!("event: {:?}", event);
@@ -177,21 +172,20 @@ pub async fn download(
     let mut messages = send_event_to_device::v3::Messages::new();
     let all = DeviceIdOrAllDevices::AllDevices;
 
-    //event_id: Box::new(event_id.clone()),
-    let establish_session = protocol::RequestSessionContent {
+    let request_session = protocol::RequestSessionEventContent {
         session_info: protocol::SessionInfo {
             webrtc_ice: String::from("moi"),
         },
     };
 
-    let establish_session_event: Raw<AnyToDeviceEventContent> =
-        Raw::from_json(serde_json::value::to_raw_value(&establish_session)?);
+    let request_session_event: Raw<AnyToDeviceEventContent> =
+        Raw::from_json(serde_json::value::to_raw_value(&request_session)?);
 
-    let values: Foo = vec![(all, establish_session_event)].into_iter().collect();
+    let values: Foo = vec![(all, request_session_event)].into_iter().collect();
 
     messages.insert(user_id, values);
     let request = send_event_to_device::v3::Request::new_raw(
-        "fi.variaattori.mxrxtx.session",
+        "fi.variaattori.mxrxtx.request_session",
         &txn_id,
         messages,
     );
@@ -203,7 +197,21 @@ pub async fn download(
         .token(first_sync_response.next_batch);
     client
         .sync_with_callback(sync_settings, |response| async move {
-            println!("got: {:?}", response);
+            // println!("got: {:?}", response);
+            let mut accepted = false;
+            for event in response.to_device.events {
+                match serde_json::from_str::<protocol::AcceptSessionEvent>(event.json().get()) {
+                    Ok(value) => {
+                        println!("Cool: {value:?}");
+                        accepted = true;
+                    }
+                    Err(err) => println!("Not cool: {err:?}"),
+                }
+            }
+
+            if accepted {
+                println!("Doing some transferring maybe");
+            }
             // let channel = sync_channel;
 
             // for (room_id, room) in response.rooms.join {
@@ -216,7 +224,7 @@ pub async fn download(
             // matrix_sdk::LoopCtrl::Break
             matrix_sdk::LoopCtrl::Continue
         })
-        .await;
+        .await?;
 
     Ok(())
 }
