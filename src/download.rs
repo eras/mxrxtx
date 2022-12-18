@@ -149,19 +149,11 @@ pub async fn download(
         .ok_or(Error::NoSuchRoomError(String::from(room_id.as_str())))?;
 
     let event = room.event(event_id.as_ref()).await?;
-    // let user_id = match event.event.deserialize()? {
-    //     ruma_events::AnyRoomEvent::Message(ruma_events::AnyMessageEvent::RoomMessage(
-    //         message_event,
-    //     )) => message_event.sender,
-    //     _ => return Err(Error::NotAMessageEventError(event_id.as_str().to_string())),
-    // };
 
-    let user_id = client
-        .user_id()
-        .expect("User id should be set at this point");
-    let user_id = ruma_common::UserId::parse(user_id.as_str())?;
+    let offer = serde_json::from_str::<protocol::SyncOffer>(event.event.json().get())?;
+    println!("offer: {offer:?}");
 
-    // println!("event: {:?}", event);
+    let peer_user_id = offer.sender().to_owned();
 
     let txn_id = ruma::TransactionId::new();
     use ruma::events::AnyToDeviceEventContent;
@@ -183,7 +175,7 @@ pub async fn download(
 
     let values: Foo = vec![(all, request_session_event)].into_iter().collect();
 
-    messages.insert(user_id, values);
+    messages.insert(peer_user_id, values);
     let request = send_event_to_device::v3::Request::new_raw(
         "fi.variaattori.mxrxtx.request_session",
         &txn_id,

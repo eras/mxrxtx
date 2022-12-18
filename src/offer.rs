@@ -193,17 +193,18 @@ pub async fn offer(
 	    client
 	    .sync_with_callback(sync_settings, |response| async {
 		let mut requested = false;
+		let mut request_event = None;
                 for event in response.to_device.events {
 		    match serde_json::from_str::<protocol::RequestSessionEvent>(event.json().get()) {
 			Ok(value) => {
 			    println!("Cool: {value:?}");
-			    requested = true;
+			    request_event = Some(event);
 			}
 			Err(err) => println!("Not cool: {err:?}"),
 		    }
                 }
 
-		if requested {
+		if let Some(request_event) = request_event {
 		    let accept_session = protocol::RequestSessionEventContent {
 			session_info: protocol::SessionInfo {
 			    webrtc_ice: String::from("heihei"),
@@ -222,8 +223,17 @@ pub async fn offer(
 		    type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
 		    let values: Foo = vec![(all, accept_session_event)].into_iter().collect();
 
+		    let peer_user_id = match request_event.deserialize() {
+			Ok(event) => {
+			    event.sender().to_owned()
+			}
+			_ => todo!(),
+		    };
+
+		    println!("Sending to {peer_user_id:?}");
+
 		    let txn_id = ruma::TransactionId::new();
-		    messages.insert(user_id.clone(), values);
+		    messages.insert(peer_user_id.clone(), values);
 		    let request = send_event_to_device::v3::Request::new_raw(
 			"fi.variaattori.mxrxtx.accept_session",
 			&txn_id,
