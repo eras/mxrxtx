@@ -63,7 +63,11 @@ impl std::fmt::Display for MatrixUriParseError {
 }
 
 fn mxid_uri_from_mxid(mxid: &matrix_uri::MatrixId) -> String {
-    format!("{}{}", mxid.id_type.to_sigil(), mxid.body)
+    // I don't understand when the sigil is or isn't there..
+    match mxid.id_type {
+        matrix_uri::IdType::RoomAlias => format!("{}{}", mxid.id_type.to_sigil(), mxid.body),
+        _ => String::from(mxid.body.clone()),
+    }
 }
 
 #[rustfmt::skip::macros(select)]
