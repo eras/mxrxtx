@@ -1,5 +1,6 @@
 use crate::{config, matrix_common, protocol};
 use matrix_sdk::config::SyncSettings;
+use matrix_sdk::ruma::events::ToDeviceEvent;
 use matrix_sdk::Client;
 use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
@@ -193,12 +194,13 @@ pub async fn offer(
 	    client
 	    .sync_with_callback(sync_settings, |response| async {
 		let mut requested = false;
-		let mut request_event = None;
+		let mut request_event: Option<protocol::RequestSessionEvent> = None;
                 for event in response.to_device.events {
-		    match serde_json::from_str::<protocol::RequestSessionEvent>(event.json().get()) {
+		    match serde_json::from_str(event.json().get()) {
 			Ok(value) => {
 			    println!("Cool: {value:?}");
-			    request_event = Some(event);
+			    assert!(request_event.is_none(), "TODO: support multiple events? start multiple handshakes?");
+			    request_event = Some(value);
 			}
 			Err(err) => println!("Not cool: {err:?}"),
 		    }
@@ -223,12 +225,7 @@ pub async fn offer(
 		    type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
 		    let values: Foo = vec![(all, accept_session_event)].into_iter().collect();
 
-		    let peer_user_id = match request_event.deserialize() {
-			Ok(event) => {
-			    event.sender().to_owned()
-			}
-			_ => todo!(),
-		    };
+		    let peer_user_id = request_event.sender.to_owned();
 
 		    println!("Sending to {peer_user_id:?}");
 
