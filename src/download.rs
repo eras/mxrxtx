@@ -169,8 +169,8 @@ pub async fn download(
     let all = DeviceIdOrAllDevices::AllDevices;
 
     let request_session = protocol::RequestSessionEventContent {
-        session_info: protocol::SessionInfo {
-            webrtc_ice: String::from("moi"),
+        webrtc_offer: protocol::WebRTCOffer {
+            offer: String::from("moi"),
         },
     };
 

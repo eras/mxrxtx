@@ -3,21 +3,21 @@ use serde_derive::{Deserialize, Serialize};
 use matrix_sdk::ruma::events::macros::EventContent;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SessionInfo {
+pub struct WebRTCOffer {
     //    pub event_id: Box<ruma::EventId>,
-    pub webrtc_ice: String,
+    pub offer: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.request_session", kind = ToDevice)]
 pub struct RequestSessionEventContent {
-    pub session_info: SessionInfo,
+    pub webrtc_offer: WebRTCOffer,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.accept_session", kind = ToDevice)]
 pub struct AcceptSessionEventContent {
-    pub session_info: SessionInfo,
+    pub webrtc_offer: WebRTCOffer,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

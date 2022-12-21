@@ -206,8 +206,8 @@ pub async fn offer(
 
 		if let Some(request_event) = request_event {
 		    let accept_session = protocol::RequestSessionEventContent {
-			session_info: protocol::SessionInfo {
-			    webrtc_ice: String::from("heihei"),
+			webrtc_offer: protocol::WebRTCOffer {
+			    offer: String::from("heihei"),
 			},
 		    };
 
