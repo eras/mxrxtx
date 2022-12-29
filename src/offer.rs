@@ -1,10 +1,14 @@
-use crate::{config, matrix_common, protocol};
+use crate::{
+    config, level_event::LevelEvent, matrix_common, matrix_signaling::MatrixSignaling, protocol,
+    transport::Transport,
+};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::events::ToDeviceEvent;
 use matrix_sdk::Client;
 use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
@@ -186,65 +190,36 @@ pub async fn offer(
         .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
+
+    let exit_event = Arc::new(LevelEvent::new());
+    let signaling = MatrixSignaling::new(client.clone(), None).await;
+    let mut transport = Transport::new(signaling).unwrap();
+
+    let task = tokio::spawn({
+        let exit_event = exit_event.clone();
+        async move {
+            println!("Accepting!");
+            let cn = transport.accept().await.unwrap();
+            println!("Accepted!");
+            println!("Stopping!");
+            transport.stop().await.unwrap();
+            println!("Stopped!");
+            exit_event.issue().await;
+        }
+    });
+
     select! {
-	_done = ctrl_c => {
+    	_done = ctrl_c => {
+    	    ()
+    	}
+    	done = client.sync(sync_settings) => {
+	    done?;
+	}
+	_exit = task => {
 	    ()
 	}
-	_done = {
-	    client
-	    .sync_with_callback(sync_settings, |response| async {
-		let mut requested = false;
-		let mut request_event: Option<protocol::RequestSessionEvent> = None;
-                for event in response.to_device.events {
-		    match serde_json::from_str(event.json().get()) {
-			Ok(value) => {
-			    println!("Cool: {value:?}");
-			    assert!(request_event.is_none(), "TODO: support multiple events? start multiple handshakes?");
-			    request_event = Some(value);
-			}
-			Err(err) => println!("Not cool: {err:?}"),
-		    }
-                }
-
-		if let Some(request_event) = request_event {
-		    let accept_session = protocol::RequestSessionEventContent {
-			webrtc_offer: protocol::WebRTCOffer {
-			    offer: String::from("heihei"),
-			},
-		    };
-
-		    let accept_session_event: Raw<AnyToDeviceEventContent> =
-			Raw::from_json(serde_json::value::to_raw_value(&accept_session).unwrap());
-
-		    use ruma::events::AnyToDeviceEventContent;
-		    use ruma::serde::Raw;
-		    use ruma_common::to_device::DeviceIdOrAllDevices;
-		    use std::collections::BTreeMap;
-		    let all = DeviceIdOrAllDevices::AllDevices;
-		    let mut messages = send_event_to_device::v3::Messages::new();
-		    type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
-		    let values: Foo = vec![(all, accept_session_event)].into_iter().collect();
-
-		    let peer_user_id = request_event.sender.to_owned();
-
-		    println!("Sending to {peer_user_id:?}");
-
-		    let txn_id = ruma::TransactionId::new();
-		    messages.insert(peer_user_id.clone(), values);
-		    let request = send_event_to_device::v3::Request::new_raw(
-			"fi.variaattori.mxrxtx.accept_session",
-			&txn_id,
-			messages,
-		    );
-		    client.send(request, None).await.unwrap(); // TODO
-		}
-
-	        // matrix_sdk::LoopCtrl::Break
-	        matrix_sdk::LoopCtrl::Continue
-	})} => {
-		()
-	    }
     }
+    exit_event.issue().await;
 
     println!("Redacting offer");
     room.redact(
