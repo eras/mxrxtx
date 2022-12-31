@@ -1,6 +1,5 @@
 use crate::{
-    config, matrix_common, matrix_signaling::MatrixSignaling, protocol,
-    transport::Transport,
+    config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport::Transport,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -10,7 +9,7 @@ use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::Write;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use thiserror::Error;
@@ -257,9 +256,8 @@ pub async fn download(
     	done = client.sync(sync_settings) => {
 	    done?;
 	}
-	_exit = download_task => 
+	_exit = download_task =>
 	    (),
-	
     }
 
     Ok(())
