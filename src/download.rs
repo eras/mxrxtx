@@ -1,19 +1,17 @@
 use crate::{
-    config, matrix_common, matrix_signaling::MatrixSignaling, protocol, signaling,
+    config, matrix_common, matrix_signaling::MatrixSignaling, protocol,
     transport::Transport,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
-use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::{self, select};
@@ -76,7 +74,7 @@ fn mxid_uri_from_mxid(mxid: &matrix_uri::MatrixId) -> String {
     // I don't understand when the sigil is or isn't there..
     match mxid.id_type {
         matrix_uri::IdType::RoomAlias => format!("{}{}", mxid.id_type.to_sigil(), mxid.body),
-        _ => String::from(mxid.body.clone()),
+        _ => mxid.body.clone(),
     }
 }
 
@@ -121,7 +119,7 @@ pub async fn download(
 
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
-    let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(|x| MatrixUriParseError(x))?;
+    let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
     let mxid = mxid_uri_from_mxid(&uri.mxid);
     let room_id = match uri.mxid.id_type {
         matrix_uri::IdType::RoomId => {
@@ -219,7 +217,7 @@ pub async fn download(
                         file_idx += 1;
                         file_offset = 0usize;
                     } else {
-                        let write_bytes = cmp::min(cur_bytes_remaining as usize, n);
+                        let write_bytes = cmp::min(cur_bytes_remaining, n);
                         dbg!(write_bytes);
                         if cur_file.is_none() {
                             let mut path = PathBuf::from(&output_dir);
@@ -236,7 +234,7 @@ pub async fn download(
                                     .unwrap();
                                 buffer_offset += write_bytes;
                                 file_offset += write_bytes;
-                                n -= write_bytes as usize;
+                                n -= write_bytes;
                             }
                             None => panic!("Impossible"), // todo: how to avoid this match?
                         }
@@ -244,7 +242,7 @@ pub async fn download(
                 }
                 dbg!();
             }
-            cn.write(b"ok").await.unwrap();
+            cn.write_all(b"ok").await.unwrap();
             println!("Stopping after receiving {total_bytes} bytes");
             transport.stop().await.unwrap();
             println!("Stopped!");
@@ -259,9 +257,9 @@ pub async fn download(
     	done = client.sync(sync_settings) => {
 	    done?;
 	}
-	_exit = download_task => {
-	    ()
-	}
+	_exit = download_task => 
+	    (),
+	
     }
 
     Ok(())

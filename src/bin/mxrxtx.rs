@@ -59,9 +59,9 @@ fn init_logging(enable: bool) -> Result<(), LoggingSetupError> {
                 .appender("logfile")
                 .build(LevelFilter::Debug),
         )
-        .map_err(|x| log4rs::config::InitError::BuildConfig(x))?;
+        .map_err(log4rs::config::InitError::BuildConfig)?;
 
-    log4rs::init_config(config).map_err(|x| log4rs::config::InitError::SetLogger(x))?;
+    log4rs::init_config(config).map_err(log4rs::config::InitError::SetLogger)?;
 
     Ok(())
 }

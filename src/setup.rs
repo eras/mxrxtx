@@ -88,7 +88,7 @@ pub async fn setup_mode(
 
     let login = client
         .login_username(user_id.localpart(), &password)
-        .device_id(&device_name.unwrap_or("mxrxtx".to_string()))
+        .device_id(&device_name.unwrap_or_else(|| "mxrxtx".to_string()))
         .send()
         .await?;
 
@@ -96,9 +96,9 @@ pub async fn setup_mode(
     config.access_token = login.access_token;
     config.refresh_token = login.refresh_token;
     config.device_id = login.device_id.to_string();
-    config.save(&config_file)?;
+    config.save(config_file)?;
 
     println!("Login successful. Saved configuration to {}", config_file);
 
-    return Ok(());
+    Ok(())
 }

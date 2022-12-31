@@ -4,15 +4,13 @@ use crate::{
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
-use matrix_sdk::ruma::events::ToDeviceEvent;
 use matrix_sdk::Client;
-use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
@@ -113,11 +111,6 @@ pub async fn offer(
         .await?;
     client.restore_login(session).await?;
 
-    let user_id = client
-        .user_id()
-        .expect("User id should be set at this point");
-    let user_id = ruma_common::UserId::parse(user_id.as_str())?;
-
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
     let room = match RoomType::classify(room)? {
@@ -138,12 +131,10 @@ pub async fn offer(
                 .iter()
                 .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)
                 .collect();
-            if matching.len() == 1 {
-                matching[0].clone()
-            } else if matching.len() > 1 {
-                return Err(Error::MultipleRoomNameMatchesError(String::from(room)));
-            } else {
-                return Err(Error::NoSuchRoomError(String::from(room)));
+            match matching.len() {
+                1 => matching[0].clone(),
+                x if x > 1 => return Err(Error::MultipleRoomNameMatchesError(String::from(room))),
+                _ => return Err(Error::NoSuchRoomError(String::from(room))),
             }
         }
     };
@@ -224,7 +215,7 @@ pub async fn offer(
                 }
             }
             println!("Waiting ack");
-            cn.read(&mut buffer[0..2]).await.unwrap();
+            cn.read_exact(&mut buffer[0..2]).await.unwrap();
             println!("Received ack, stopping");
             transport.stop().await.unwrap();
             println!("Stopped!");
@@ -233,15 +224,11 @@ pub async fn offer(
     });
 
     select! {
-    	_done = ctrl_c => {
-    	    ()
-    	}
+    	_done = ctrl_c => (),
     	done = client.sync(sync_settings) => {
 	    done?;
 	}
-	_exit = task => {
-	    ()
-	}
+	_exit = task => (),
     }
     exit_event.issue().await;
 

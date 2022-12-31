@@ -2,6 +2,7 @@ use async_condvar_fair::{BatonExt, Condvar};
 use std::ops::Deref;
 use tokio::sync::Mutex;
 
+#[derive(Default)]
 pub struct LevelEvent {
     level: Mutex<bool>,
     cv: Condvar,

@@ -1,22 +1,14 @@
 use crate::{protocol, signaling::Signaling};
 use async_datachannel::Message;
 use async_trait::async_trait;
-use core::fmt;
-use futures::{
-    channel::{mpsc, oneshot},
-    stream::StreamExt,
-    SinkExt,
-};
+use futures::{channel::mpsc, stream::StreamExt, SinkExt};
 //use matrix_sdk::ruma::events::AnyToDeviceEvent;
 use anyhow;
 use matrix_sdk::{event_handler::EventHandlerHandle, Client};
 use ruma::OwnedUserId;
 use ruma_client_api;
-use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 use tokio::{self, sync::Mutex};
-
-type Events = ruma_client_api::sync::sync_events::v3::ToDevice;
 
 pub struct MatrixSignaling {
     client: Client,
@@ -111,7 +103,9 @@ impl Signaling for MatrixSignaling {
 
     async fn close(mut self) {
         println!("MatrixSignaling: closing");
-        (self.handler_handle.lock().await.take()).map(|x| self.client.remove_event_handler(x));
+        if let Some(x) = self.handler_handle.lock().await.take() {
+            self.client.remove_event_handler(x);
+        }
         println!("MatrixSignaling: closed");
     }
 }

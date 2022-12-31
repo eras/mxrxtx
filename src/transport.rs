@@ -1,23 +1,15 @@
 use crate::signaling::Signaling;
 use anyhow;
 use async_trait::async_trait;
-use core::pin::Pin;
 use thiserror::Error;
 
-use core::fmt;
-
-use std::sync::{Arc, Mutex};
-
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use async_datachannel::{DataStream, Message, PeerConnection, RtcConfig};
-use futures::stream::{self, StreamExt};
+use futures::channel::{mpsc, oneshot};
+use futures::stream::StreamExt;
 use futures::SinkExt;
-use futures::{
-    channel::{mpsc, oneshot},
-    AsyncReadExt, AsyncWriteExt,
-};
 
 use tokio::{self, select};
 
@@ -37,9 +29,7 @@ enum State {
     PeerConnection(PeerConnection),
 }
 
-pub struct Transport<'a> {
-    ice_servers: Vec<&'a str>,
-    rtc_config: RtcConfig,
+pub struct Transport {
     state: Option<State>,
     worker: Option<tokio::task::JoinHandle<()>>,
     stop_tx: Option<oneshot::Sender<()>>,
@@ -91,7 +81,7 @@ async fn handle_signaling(
     signaling.close().await;
 }
 
-impl<'a> Transport<'a> {
+impl Transport {
     pub fn new(signaling: impl Signaling + Send + Sync + Sync + 'static) -> Result<Self, Error> {
         let ice_servers = vec!["stun:stun.l.google.com:19302"];
         let rtc_config = RtcConfig::new(&ice_servers);
@@ -103,8 +93,6 @@ impl<'a> Transport<'a> {
             handle_signaling(rx_sig_outbound, tx_sig_inbound, signaling, stop_rx).await
         });
         Ok(Transport {
-            ice_servers,
-            rtc_config,
             state: Some(State::PeerConnection(listener)),
             worker: Some(worker),
             stop_tx: Some(stop_tx),
@@ -157,45 +145,46 @@ impl<'a> Transport<'a> {
     }
 }
 
-struct TestSignaling {
-    label: &'static str,
-    rx: mpsc::Receiver<String>,
-    tx: mpsc::Sender<String>,
-}
-
-impl TestSignaling {
-    fn new(label: &'static str, rx: mpsc::Receiver<String>, tx: mpsc::Sender<String>) -> Self {
-        TestSignaling { label, rx, tx }
-    }
-}
-
-#[async_trait]
-impl Signaling for TestSignaling {
-    async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
-        println!("{} sends a message {:?}", self.label, &message);
-        self.tx
-            .send(serde_json::to_string(&message).unwrap())
-            .await
-            .unwrap();
-        Ok(())
-    }
-
-    async fn recv(&mut self) -> Result<Option<Message>, anyhow::Error> {
-        let msg = self
-            .rx
-            .next()
-            .await
-            .map(|msg| serde_json::from_str::<Message>(&msg).unwrap());
-        println!("{} received a message {:?}", self.label, &msg);
-        Ok(msg)
-    }
-
-    async fn close(self) {}
-}
-
 mod tests {
     use super::*;
     //use async_trait::async_trait;
+
+    struct TestSignaling {
+        label: &'static str,
+        rx: mpsc::Receiver<String>,
+        tx: mpsc::Sender<String>,
+    }
+
+    impl TestSignaling {
+        #[allow(dead_code)]
+        fn new(label: &'static str, rx: mpsc::Receiver<String>, tx: mpsc::Sender<String>) -> Self {
+            TestSignaling { label, rx, tx }
+        }
+    }
+
+    #[async_trait]
+    impl Signaling for TestSignaling {
+        async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
+            println!("{} sends a message {:?}", self.label, &message);
+            self.tx
+                .send(serde_json::to_string(&message).unwrap())
+                .await
+                .unwrap();
+            Ok(())
+        }
+
+        async fn recv(&mut self) -> Result<Option<Message>, anyhow::Error> {
+            let msg = self
+                .rx
+                .next()
+                .await
+                .map(|msg| serde_json::from_str::<Message>(&msg).unwrap());
+            println!("{} received a message {:?}", self.label, &msg);
+            Ok(msg)
+        }
+
+        async fn close(self) {}
+    }
 
     #[tokio::test]
     async fn test_signaling() {
