@@ -155,6 +155,15 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 ),
         )
         .arg(
+            clap::Arg::new("output-dir")
+                .long("output")
+                .short('O')
+                .default_value(".")
+                .help(
+                    "Directory to use for downloading, defaults to ."
+                ),
+        )
+        .arg(
             clap::Arg::new("state")
                 .long("state")
                 .takes_value(true)
@@ -206,6 +215,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     let state_dir = get_state_dir(args.value_of("state"))?;
 
+    let output_dir = args.value_of("output-dir").unwrap();
+
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
     } else if args.is_present("download") {
@@ -213,7 +224,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
             .values_of_t("download")
             .expect("clap arguments should ensure this");
         let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-        download::download(config, &state_dir, urls).await?;
+        download::download(config, &state_dir, urls, output_dir).await?;
     } else if args.is_present("offer") {
         let args: Vec<String> = args
             .values_of_t("offer")

@@ -2,11 +2,16 @@ use crate::{
     config, matrix_common, matrix_signaling::MatrixSignaling, protocol, signaling,
     transport::Transport,
 };
+use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
 use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
+use std::cmp;
 use std::convert::TryFrom;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -80,6 +85,7 @@ pub async fn download(
     config: config::Config,
     state_dir: &str,
     urls: Vec<&str>,
+    output_dir: &str,
 ) -> Result<(), Error> {
     let session = config.get_matrix_session()?;
 
@@ -163,16 +169,86 @@ pub async fn download(
 
     let peer_user_id = offer.sender().to_owned();
 
+    let offer_content: protocol::OfferContent = match offer {
+        protocol::SyncOffer::Original(offer) => offer.content,
+        protocol::SyncOffer::Redacted(_) => {
+            println!("Offer was redacted.");
+            return Ok(());
+        }
+    };
+
     let signaling = MatrixSignaling::new(client.clone(), Some(peer_user_id)).await;
     let mut transport = Transport::new(signaling).unwrap();
 
-    let download_task = tokio::spawn(async move {
-        println!("Connecting!");
-        let cn = transport.connect().await.unwrap();
-        println!("Connected!");
-        println!("Stopping!");
-        transport.stop().await.unwrap();
-        println!("Stopped!");
+    let download_task = tokio::spawn({
+        let output_dir = String::from(output_dir);
+        async move {
+            println!("Connecting!");
+            let mut cn = transport.connect().await.unwrap();
+            println!("Connected!");
+            let mut buffer: [u8; 1024] = [0; 1024];
+            let mut eof = false;
+            let mut total_bytes = 0;
+            let files = &offer_content.files;
+            let mut file_idx = 0usize;
+            let mut file_offset = 0usize;
+            let mut cur_file = None;
+            while !eof && file_idx < files.len() {
+                // todo: doesn't handle transferring single 0-byte file
+                let mut n = match cn.read(&mut buffer).await {
+                    Ok(x) => x,
+                    Err(err) => {
+                        println!("Error receiving: {err}");
+                        // TODO: this probably happens because peer immediately closes after sending
+                        // everything we should acknowledge the transfer explicitly, because
+                        // otherwise if there is a network error, we might lose the end
+                        0
+                    }
+                };
+                total_bytes += n;
+                eof = n == 0;
+                let mut buffer_offset = 0usize;
+                dbg!(n);
+                while n > 0 && file_idx < files.len() {
+                    dbg!(file_idx);
+                    let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
+                    dbg!(cur_bytes_remaining);
+                    if cur_bytes_remaining == 0 {
+                        dbg!();
+                        cur_file = None;
+                        file_idx += 1;
+                        file_offset = 0usize;
+                    } else {
+                        let write_bytes = cmp::min(cur_bytes_remaining as usize, n);
+                        dbg!(write_bytes);
+                        if cur_file.is_none() {
+                            let mut path = PathBuf::from(&output_dir);
+                            path.push(&files[file_idx].name);
+                            let file = File::create(&path).unwrap();
+                            cur_file = Some(file);
+                        }
+                        match &mut cur_file {
+                            Some(cur_file) => {
+                                cur_file
+                                    .write_all(
+                                        &buffer[buffer_offset..(buffer_offset + write_bytes)],
+                                    )
+                                    .unwrap();
+                                buffer_offset += write_bytes;
+                                file_offset += write_bytes;
+                                n -= write_bytes as usize;
+                            }
+                            None => panic!("Impossible"), // todo: how to avoid this match?
+                        }
+                    }
+                }
+                dbg!();
+            }
+            cn.write(b"ok").await.unwrap();
+            println!("Stopping after receiving {total_bytes} bytes");
+            transport.stop().await.unwrap();
+            println!("Stopped!");
+        }
     });
     let sync_settings = SyncSettings::default()
         .filter(sync_events::v3::Filter::FilterDefinition(filter_def))

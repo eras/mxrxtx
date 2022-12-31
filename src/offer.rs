@@ -2,12 +2,16 @@ use crate::{
     config, level_event::LevelEvent, matrix_common, matrix_signaling::MatrixSignaling, protocol,
     transport::Transport,
 };
+use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::events::ToDeviceEvent;
 use matrix_sdk::Client;
 use ruma_client_api::to_device::send_event_to_device;
 use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
@@ -145,16 +149,16 @@ pub async fn offer(
     };
     println!("room: {:?}", room);
 
-    let files: Vec<protocol::File> = files
+    let offer_files: Vec<protocol::File> = files
         .iter()
         .map(|file| protocol::File {
             name: file.to_string(),
             content_type: String::from("application/octet-stream"),
-            size: 0u64,
+            size: fs::metadata(Path::new(&file)).unwrap().len(), // TODO: respect this when sending file
         })
         .collect();
 
-    let offer = protocol::OfferContent { files: files };
+    let offer = protocol::OfferContent { files: offer_files };
 
     // let content = ruma_events::room::message::MessageType::new(EVENT_TYPE_OFFER, data).unwrap(); // should work always
 
@@ -197,11 +201,31 @@ pub async fn offer(
 
     let task = tokio::spawn({
         let exit_event = exit_event.clone();
+        let files: Vec<_> = files
+            .into_iter()
+            .map(|file| Path::new(file).to_path_buf())
+            .collect();
         async move {
             println!("Accepting!");
-            let cn = transport.accept().await.unwrap();
+            let mut cn = transport.accept().await.unwrap();
             println!("Accepted!");
-            println!("Stopping!");
+            let mut buffer: [u8; 1024] = [0; 1024];
+            for file in files {
+                let mut file = File::open(file).unwrap();
+                let mut eof = false;
+                while !eof {
+                    let n = file.read(&mut buffer).unwrap();
+                    dbg!(n);
+                    if n > 0 {
+                        cn.write_all(&buffer[0..n]).await.unwrap();
+                    } else {
+                        eof = true;
+                    }
+                }
+            }
+            println!("Waiting ack");
+            cn.read(&mut buffer[0..2]).await.unwrap();
+            println!("Received ack, stopping");
             transport.stop().await.unwrap();
             println!("Stopped!");
             exit_event.issue().await;
