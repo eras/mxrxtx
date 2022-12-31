@@ -187,10 +187,11 @@ pub async fn download(
             let mut eof = false;
             let mut total_bytes = 0;
             let files = &offer_content.files;
+            let expected_bytes = files.iter().map(|x| x.size as usize).sum();
             let mut file_idx = 0usize;
             let mut file_offset = 0usize;
             let mut cur_file = None;
-            while !eof && file_idx < files.len() {
+            while !eof && file_idx < files.len() && total_bytes < expected_bytes {
                 // todo: doesn't handle transferring single 0-byte file
                 let mut n = match cn.read(&mut buffer).await {
                     Ok(x) => x,
@@ -241,6 +242,7 @@ pub async fn download(
                 }
                 dbg!();
             }
+            println!("Exiting loop");
             cn.write_all(b"ok").await.unwrap();
             println!("Stopping after receiving {total_bytes} bytes");
             transport.stop().await.unwrap();
