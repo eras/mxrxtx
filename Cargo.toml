@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.44"
+async-condvar-fair = { version = "1.0.0", features = ["tokio"] }
 atomicwrites = "0.3.0"
 clap = "3.0.0" #_FOR_WINDOWS clap = { version = "3.0.0-beta.2", features = ["std", "suggestions", "derive", "cargo"], default-features = false, optional = false }
 directories-next = "2.0.0"
