@@ -1,0 +1,183 @@
+on:
+  push:
+    tags:
+      - 'v*'
+
+name: tag
+jobs:
+  create_release:
+    name: Create release
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      git_describe: ${{ steps.git_describe.outputs.git_describe }}
+      git_message: ${{ steps.git_message.outputs.git_message }}
+    steps:
+      # https://github.com/actions/create-release
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      # https://stackoverflow.com/a/58178121
+      - name: Set release information
+        id: git_describe
+        run: echo ::set-output name=git_describe::"$(git describe --tags)"
+      # https://stackoverflow.com/a/58178121
+      - name: Build started notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx release ${{ steps.git_describe.outputs.git_describe }} build started. [Progress.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
+      - name: Cancel if no tag
+        if: ${{ steps.git_describe.outputs.git_describe == '' }}
+        run: false
+      - name: Set annotated tag info information
+        id: git_message
+        run: echo ::set-output name=git_message::"$(git tag -n999 -l $(git describe --tags))"
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: ${{ steps.git_message.outputs.git_message }}
+          draft: false
+          prerelease: false
+  unix:
+    name: mxrxtx
+    needs: create_release
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install build deps
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get install git
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: build
+        env:
+          GIT_DESCRIBE: ${{ needs.create_release.outputs.git_describe }}
+        run: 'cargo build --release --locked'
+      - run: strip target/release/mxrxtx
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mxrxtx
+          path: |
+            target/release/mxrxtx
+            Cargo.lock
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+      # https://github.com/actions/upload-release-asset
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./target/release/mxrxtx
+          asset_name: mxrxtx-${{ needs.create_release.outputs.git_describe }}-${{ runner.os }}.bin
+          asset_content_type: application/octet-stream
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+  windows:
+    name: mxrxtx
+    needs: create_release
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    strategy:
+      matrix:
+        os: []
+        # windows-latest not supported now due to termion
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      # https://stackoverflow.com/a/58178121
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: build
+        env:
+          GIT_DESCRIBE: ${{ needs.create_release.outputs.git_describe }}
+        run: 'cargo build --release'
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mxrxtx
+          path: |
+            target/release/mxrxtx.exe
+            Cargo.lock
+      # https://github.com/actions/upload-release-asset
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./target/release/mxrxtx.exe
+          asset_name: mxrxtx-${{ needs.create_release.outputs.git_describe }}-${{ runner.os }}.exe
+          asset_content_type: application/octet-stream
+  notify_end_success:
+    runs-on: ubuntu-latest
+    needs: [create_release, unix]
+    # windows not supported now due to termion
+    if: ${{ success() }}
+    steps:
+      - name: Build succeeded notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx release ${{ needs.create_release.outputs.git_describe }} build complete. [Logs.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
+  notify_end_failed:
+    runs-on: ubuntu-latest
+    needs: [create_release, unix]
+    # windows not supported now due to termion
+    if: ${{ !success() }}
+    steps:
+      - name: Build failed notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx release ${{ needs.create_release.outputs.git_describe }} build failed. [Logs.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
