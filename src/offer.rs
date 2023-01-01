@@ -7,7 +7,6 @@ use matrix_sdk::Client;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
