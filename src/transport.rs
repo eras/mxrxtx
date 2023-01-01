@@ -1,6 +1,5 @@
 use crate::signaling::Signaling;
 use anyhow;
-use async_trait::async_trait;
 use thiserror::Error;
 
 use serde::{Deserialize, Serialize};
@@ -145,10 +144,10 @@ impl Transport {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
-    //use async_trait::async_trait;
-    #[allow(unused_imports)]
+    use async_trait::async_trait;
     use futures::{AsyncReadExt, AsyncWriteExt};
 
     struct TestSignaling {
@@ -158,7 +157,6 @@ mod tests {
     }
 
     impl TestSignaling {
-        #[allow(dead_code)]
         fn new(label: &'static str, rx: mpsc::Receiver<String>, tx: mpsc::Sender<String>) -> Self {
             TestSignaling { label, rx, tx }
         }
