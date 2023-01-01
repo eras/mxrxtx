@@ -1,6 +1,5 @@
 use crate::{
-    config, level_event::LevelEvent, matrix_common, matrix_signaling::MatrixSignaling, protocol,
-    transport::Transport,
+    config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport::Transport,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -122,12 +121,10 @@ pub async fn offer(
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 
-    let exit_event = Arc::new(LevelEvent::new());
     let signaling = MatrixSignaling::new(client.clone(), None).await;
     let mut transport = Transport::new(signaling).unwrap();
 
     let task = tokio::spawn({
-        let exit_event = exit_event.clone();
         let files: Vec<_> = files
             .into_iter()
             .map(|file| Path::new(file).to_path_buf())
@@ -155,7 +152,6 @@ pub async fn offer(
             println!("Received ack, stopping");
             transport.stop().await.unwrap();
             println!("Stopped!");
-            exit_event.issue().await;
         }
     });
 
@@ -166,7 +162,6 @@ pub async fn offer(
 	}
 	_exit = task => (),
     }
-    exit_event.issue().await;
 
     println!("Redacting offer");
     room.redact(
