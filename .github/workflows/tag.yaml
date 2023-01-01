@@ -59,7 +59,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         # macos-latest crashes
     runs-on: ${{ matrix.os }}
     steps:
