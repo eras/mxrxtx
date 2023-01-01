@@ -127,10 +127,6 @@ pub async fn offer(
 
     let offer = protocol::OfferContent { files: offer_files };
 
-    // let content = ruma_events::room::message::MessageType::new(EVENT_TYPE_OFFER, data).unwrap(); // should work always
-
-    // let content = RoomMessageEventContent::new(content);
-
     let event_id = room
         .send(offer, Some(&ruma::TransactionId::new()))
         .await?
