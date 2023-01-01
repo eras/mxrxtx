@@ -119,6 +119,78 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
     Ok(event_id)
 }
 
+async fn transfer(
+    output_dir: String,
+    mut transport: Transport,
+    offer_content: protocol::OfferContent,
+) {
+    println!("Connecting!");
+    let mut cn = transport.connect().await.unwrap();
+    println!("Connected!");
+    let mut buffer: [u8; 1024] = [0; 1024];
+    let mut eof = false;
+    let mut total_bytes = 0;
+    let files = &offer_content.files;
+    let expected_bytes = files.iter().map(|x| x.size as usize).sum();
+    let mut file_idx = 0usize;
+    let mut file_offset = 0usize;
+    let mut cur_file = None;
+    while !eof && file_idx < files.len() && total_bytes < expected_bytes {
+        // todo: doesn't handle transferring single 0-byte file
+        let mut n = match cn.read(&mut buffer).await {
+            Ok(x) => x,
+            Err(err) => {
+                println!("Error receiving: {err}");
+                // TODO: this probably happens because peer immediately closes after sending
+                // everything we should acknowledge the transfer explicitly, because
+                // otherwise if there is a network error, we might lose the end
+                0
+            }
+        };
+        total_bytes += n;
+        eof = n == 0;
+        let mut buffer_offset = 0usize;
+        dbg!(n);
+        while n > 0 && file_idx < files.len() {
+            dbg!(file_idx);
+            let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
+            dbg!(cur_bytes_remaining);
+            if cur_bytes_remaining == 0 {
+                dbg!();
+                cur_file = None;
+                file_idx += 1;
+                file_offset = 0usize;
+            } else {
+                let write_bytes = cmp::min(cur_bytes_remaining, n);
+                dbg!(write_bytes);
+                if cur_file.is_none() {
+                    let mut path = PathBuf::from(&output_dir);
+                    path.push(&files[file_idx].name);
+                    let file = File::create(&path).unwrap();
+                    cur_file = Some(file);
+                }
+                match &mut cur_file {
+                    Some(cur_file) => {
+                        cur_file
+                            .write_all(&buffer[buffer_offset..(buffer_offset + write_bytes)])
+                            .unwrap();
+                        buffer_offset += write_bytes;
+                        file_offset += write_bytes;
+                        n -= write_bytes;
+                    }
+                    None => panic!("Impossible"), // todo: how to avoid this match?
+                }
+            }
+        }
+        dbg!();
+    }
+    println!("Exiting loop");
+    cn.write_all(b"ok").await.unwrap();
+    println!("Stopping after receiving {total_bytes} bytes");
+    transport.stop().await.unwrap();
+    println!("Stopped!");
+}
+
 #[rustfmt::skip::macros(select)]
 pub async fn download(
     config: config::Config,
@@ -163,79 +235,11 @@ pub async fn download(
     };
 
     let signaling = MatrixSignaling::new(client.clone(), Some(peer_user_id)).await;
-    let mut transport = Transport::new(signaling).unwrap();
+    let transport = Transport::new(signaling).unwrap();
 
     let download_task = tokio::spawn({
         let output_dir = String::from(output_dir);
-        async move {
-            println!("Connecting!");
-            let mut cn = transport.connect().await.unwrap();
-            println!("Connected!");
-            let mut buffer: [u8; 1024] = [0; 1024];
-            let mut eof = false;
-            let mut total_bytes = 0;
-            let files = &offer_content.files;
-            let expected_bytes = files.iter().map(|x| x.size as usize).sum();
-            let mut file_idx = 0usize;
-            let mut file_offset = 0usize;
-            let mut cur_file = None;
-            while !eof && file_idx < files.len() && total_bytes < expected_bytes {
-                // todo: doesn't handle transferring single 0-byte file
-                let mut n = match cn.read(&mut buffer).await {
-                    Ok(x) => x,
-                    Err(err) => {
-                        println!("Error receiving: {err}");
-                        // TODO: this probably happens because peer immediately closes after sending
-                        // everything we should acknowledge the transfer explicitly, because
-                        // otherwise if there is a network error, we might lose the end
-                        0
-                    }
-                };
-                total_bytes += n;
-                eof = n == 0;
-                let mut buffer_offset = 0usize;
-                dbg!(n);
-                while n > 0 && file_idx < files.len() {
-                    dbg!(file_idx);
-                    let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
-                    dbg!(cur_bytes_remaining);
-                    if cur_bytes_remaining == 0 {
-                        dbg!();
-                        cur_file = None;
-                        file_idx += 1;
-                        file_offset = 0usize;
-                    } else {
-                        let write_bytes = cmp::min(cur_bytes_remaining, n);
-                        dbg!(write_bytes);
-                        if cur_file.is_none() {
-                            let mut path = PathBuf::from(&output_dir);
-                            path.push(&files[file_idx].name);
-                            let file = File::create(&path).unwrap();
-                            cur_file = Some(file);
-                        }
-                        match &mut cur_file {
-                            Some(cur_file) => {
-                                cur_file
-                                    .write_all(
-                                        &buffer[buffer_offset..(buffer_offset + write_bytes)],
-                                    )
-                                    .unwrap();
-                                buffer_offset += write_bytes;
-                                file_offset += write_bytes;
-                                n -= write_bytes;
-                            }
-                            None => panic!("Impossible"), // todo: how to avoid this match?
-                        }
-                    }
-                }
-                dbg!();
-            }
-            println!("Exiting loop");
-            cn.write_all(b"ok").await.unwrap();
-            println!("Stopping after receiving {total_bytes} bytes");
-            transport.stop().await.unwrap();
-            println!("Stopped!");
-        }
+        async move { transfer(output_dir, transport, offer_content).await }
     });
     let sync_settings = SyncSettings::default()
         .filter(filter)
