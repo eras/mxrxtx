@@ -4,7 +4,6 @@ use crate::{
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
-use ruma_client_api::{filter, sync::sync_events};
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -86,28 +85,9 @@ pub async fn download(
 ) -> Result<(), Error> {
     let session = config.get_matrix_session()?;
 
-    let mut empty_room_event_filter = filter::RoomEventFilter::empty();
-    empty_room_event_filter.limit = Some(From::from(1u32));
-    empty_room_event_filter.rooms = Some(&[]);
-    empty_room_event_filter.lazy_load_options = filter::LazyLoadOptions::Enabled {
-        include_redundant_members: false,
-    };
-
-    let mut no_types_filter = filter::Filter::empty();
-    no_types_filter.types = Some(&[]);
-    let mut filter_def = filter::FilterDefinition::empty();
-    filter_def.presence = no_types_filter.clone();
-    filter_def.account_data = no_types_filter.clone();
-    filter_def.room.include_leave = false;
-    filter_def.room.account_data = empty_room_event_filter.clone();
-    filter_def.room.timeline = empty_room_event_filter.clone();
-    filter_def.room.ephemeral = empty_room_event_filter.clone();
-    filter_def.room.state = empty_room_event_filter.clone();
-
+    let filter = matrix_common::just_joined_rooms_filter();
     let sync_settings = SyncSettings::default()
-        .filter(sync_events::v3::Filter::FilterDefinition(
-            filter_def.clone(),
-        ))
+        .filter(filter.clone())
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
@@ -250,7 +230,7 @@ pub async fn download(
         }
     });
     let sync_settings = SyncSettings::default()
-        .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
+        .filter(filter)
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 

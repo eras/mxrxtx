@@ -1,6 +1,4 @@
-use matrix_sdk::config::SyncSettings;
 use ruma_client_api::{filter, sync::sync_events};
-use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -24,9 +22,7 @@ pub enum Error {
     RoomNameError(String),
 }
 
-pub(crate) async fn get_joined_rooms(
-    client: &matrix_sdk::Client,
-) -> Result<Vec<matrix_sdk::room::Joined>, Error> {
+pub(crate) fn just_joined_rooms_filter<'a>() -> sync_events::v3::Filter<'a> {
     let mut empty_room_event_filter = filter::RoomEventFilter::empty();
     empty_room_event_filter.limit = Some(From::from(1u32));
     empty_room_event_filter.rooms = Some(&[]);
@@ -45,10 +41,5 @@ pub(crate) async fn get_joined_rooms(
     filter_def.room.timeline = empty_room_event_filter.clone();
     filter_def.room.ephemeral = empty_room_event_filter.clone();
     filter_def.room.state = empty_room_event_filter.clone();
-    let sync_settings = SyncSettings::default()
-        .filter(sync_events::v3::Filter::FilterDefinition(filter_def))
-        .timeout(Duration::from_millis(1000))
-        .full_state(true);
-    let _sync_response = client.sync_once(sync_settings).await?;
-    Ok(client.joined_rooms())
+    sync_events::v3::Filter::FilterDefinition(filter_def)
 }
