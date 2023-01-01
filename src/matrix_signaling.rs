@@ -159,7 +159,7 @@ impl Signaling for MatrixSignaling {
             let values: Foo = vec![(
                 session_info
                     .peer_device_id
-                    .map(|x| DeviceIdOrAllDevices::DeviceId(x))
+                    .map(DeviceIdOrAllDevices::DeviceId)
                     .unwrap_or(DeviceIdOrAllDevices::AllDevices),
                 webrtc_event,
             )]
