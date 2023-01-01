@@ -6,7 +6,7 @@ use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -46,6 +46,31 @@ pub enum Error {
 
     #[error(transparent)]
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
+}
+
+async fn transfer(files: Vec<PathBuf>, mut transport: Transport) {
+    println!("Accepting!");
+    let mut cn = transport.accept().await.unwrap();
+    println!("Accepted!");
+    let mut buffer: [u8; 1024] = [0; 1024];
+    for file in files {
+        let mut file = File::open(file).unwrap();
+        let mut eof = false;
+        while !eof {
+            let n = file.read(&mut buffer).unwrap();
+            dbg!(n);
+            if n > 0 {
+                cn.write_all(&buffer[0..n]).await.unwrap();
+            } else {
+                eof = true;
+            }
+        }
+    }
+    println!("Waiting ack");
+    cn.read_exact(&mut buffer[0..2]).await.unwrap();
+    println!("Received ack, stopping");
+    transport.stop().await.unwrap();
+    println!("Stopped!");
 }
 
 #[rustfmt::skip::macros(select)]
@@ -122,37 +147,14 @@ pub async fn offer(
         .token(first_sync_response.next_batch);
 
     let signaling = MatrixSignaling::new(client.clone(), None).await;
-    let mut transport = Transport::new(signaling).unwrap();
+    let transport = Transport::new(signaling).unwrap();
 
     let task = tokio::spawn({
-        let files: Vec<_> = files
+        let files: Vec<PathBuf> = files
             .into_iter()
             .map(|file| Path::new(file).to_path_buf())
             .collect();
-        async move {
-            println!("Accepting!");
-            let mut cn = transport.accept().await.unwrap();
-            println!("Accepted!");
-            let mut buffer: [u8; 1024] = [0; 1024];
-            for file in files {
-                let mut file = File::open(file).unwrap();
-                let mut eof = false;
-                while !eof {
-                    let n = file.read(&mut buffer).unwrap();
-                    dbg!(n);
-                    if n > 0 {
-                        cn.write_all(&buffer[0..n]).await.unwrap();
-                    } else {
-                        eof = true;
-                    }
-                }
-            }
-            println!("Waiting ack");
-            cn.read_exact(&mut buffer[0..2]).await.unwrap();
-            println!("Received ack, stopping");
-            transport.stop().await.unwrap();
-            println!("Stopped!");
-        }
+        async move { transfer(files, transport).await }
     });
 
     select! {
