@@ -35,6 +35,9 @@ pub enum Error {
     #[error("Matrix uri does not have event id: {}", .0)]
     MatrixUriMissingEventIdError(String),
 
+    #[error("Offer was redacted")]
+    OfferRedactedError,
+
     #[error("Event is not a message: {}", .0)]
     NotAMessageEventError(String),
 
@@ -155,8 +158,7 @@ pub async fn download(
     let offer_content: protocol::OfferContent = match offer {
         protocol::SyncOffer::Original(offer) => offer.content,
         protocol::SyncOffer::Redacted(_) => {
-            println!("Offer was redacted.");
-            return Ok(());
+            return Err(Error::OfferRedactedError);
         }
     };
 
