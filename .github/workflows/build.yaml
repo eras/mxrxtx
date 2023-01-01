@@ -1,0 +1,79 @@
+name: Build
+
+on: [push]
+
+jobs:
+  notify_start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build started notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx ${{ github.sha }} build started. [Progress.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
+  build:
+    needs: notify_start
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install build deps
+        run: sudo apt-get install git
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - run: 'cargo build --locked'
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mxrxtx-${{ runner.os }}
+          path: |
+            target/debug/mxrxtx
+            Cargo.lock
+        if: ${{ matrix.os != 'windows-latest' }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mxrxtx-${{ runner.os }}.exe
+          path: |
+            target/debug/mxrxtx.exe
+            Cargo.lock
+        if: ${{ matrix.os == 'windows-latest' }}
+  notify_end_success:
+    runs-on: ubuntu-latest
+    if: ${{ success() }}
+    needs: [notify_start, build]
+    steps:
+      - name: Build succeeded notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx ${{ github.sha }} build complete OK. [Logs.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
+  notify_end_failed:
+    runs-on: ubuntu-latest
+    needs: [notify_start, build]
+    if: ${{ !success() }}
+    steps:
+      - name: Build failed notification
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "mxrxtx ${{ github.sha }} build failed. [Logs.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
+          server: ${{ secrets.MATRIX_SERVER }}
