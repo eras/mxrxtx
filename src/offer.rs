@@ -47,7 +47,7 @@ pub enum Error {
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
 }
 
-async fn transfer(files: Vec<PathBuf>, mut transport: Transport) {
+pub async fn transfer(files: Vec<PathBuf>, mut transport: Transport) {
     println!("Accepting!");
     let mut cn = transport.accept().await.unwrap();
     println!("Accepted!");

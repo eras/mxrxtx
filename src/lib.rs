@@ -7,5 +7,6 @@ pub mod offer;
 pub mod protocol;
 pub mod setup;
 pub mod signaling;
+pub mod test_signaling;
 pub mod transport;
 pub mod version;

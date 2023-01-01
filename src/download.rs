@@ -119,7 +119,7 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
     Ok(event_id)
 }
 
-async fn transfer(
+pub async fn transfer(
     output_dir: String,
     mut transport: Transport,
     offer_content: protocol::OfferContent,
