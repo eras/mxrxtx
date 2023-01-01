@@ -76,11 +76,6 @@ pub async fn setup_mode(
     };
     let user_id = <&ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
-    // // let user_id = <&ruma_identifiers::UserId>::try_from(user_id.as_str())?;
-    // // let user_id = (<ruma_common::UserId>::try_from(user_id)).to_owned();
-
-    // let user_id = ruma_common::UserId::parse(user_id.as_str())?;
-    // let user_id = matrix_sdk::ruma::UserId::try_from(mxid)?;
     let client = Client::builder()
         .server_name(user_id.server_name())
         .build()
