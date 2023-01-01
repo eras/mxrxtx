@@ -1,5 +1,4 @@
 use std::io::{stdin, stdout, Write};
-use termion::input::TermRead;
 
 use crate::config;
 
@@ -36,6 +35,36 @@ pub enum Error {
     IdParseError(#[from] ruma::IdParseError),
 }
 
+// Termion that provides read_passwd doesn't compile on Windows
+mod console {
+    use std::io::{BufRead, StdinLock, StdoutLock};
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn read_passwd(
+        stdin: &mut StdinLock,
+        stdout: &mut StdoutLock,
+    ) -> Result<Option<String>, super::Error> {
+        use termion::input::TermRead;
+        stdin
+            .read_passwd(stdout)
+            .map_err(|_| super::Error::NoInputError)
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn read_passwd(
+        stdin: &mut StdinLock,
+        _stdout: &mut StdoutLock,
+    ) -> Result<Option<String>, super::Error> {
+        read_line(stdin)
+    }
+
+    pub fn read_line(stdin: &mut StdinLock) -> Result<Option<String>, super::Error> {
+        let mut buffer = String::new();
+        BufRead::read_line(stdin, &mut buffer)?;
+        Ok(Some(buffer))
+    }
+}
+
 pub async fn setup_mode(
     _args: clap::ArgMatches,
     mut config: config::Config,
@@ -48,13 +77,15 @@ pub async fn setup_mode(
             let stdin = stdin();
             let mut stdin = stdin.lock();
 
-            stdout.write_all(b"Matrix id (e.g. @user:example.org): ")?;
-            stdout.flush()?;
-            let mxid = stdin.read_line()?.ok_or(Error::NoInputError)?;
+            let mxid = {
+                stdout.write_all(b"Matrix id (e.g. @user:example.org): ")?;
+                stdout.flush()?;
+                console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?
+            };
 
             stdout.write_all(b"Device name (empty to use default device name \"mxrxtx\"): ")?;
             stdout.flush()?;
-            let device_name = stdin.read_line()?.ok_or(Error::NoInputError)?;
+            let device_name = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             let device_name = if device_name.is_empty() {
                 None
             } else {
@@ -63,7 +94,8 @@ pub async fn setup_mode(
 
             stdout.write_all(b"Password: ")?;
             stdout.flush()?;
-            let password = stdin.read_passwd(&mut stdout)?.ok_or(Error::NoInputError)?;
+            let password =
+                console::read_passwd(&mut stdin, &mut stdout)?.ok_or(Error::NoInputError)?;
             stdout.write_all(b"\n")?;
 
             Ok((mxid, password, device_name))
