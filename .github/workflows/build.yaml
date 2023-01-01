@@ -40,7 +40,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Clippy
-        run: cargo clippy
+        run: 'cargo clippy --no-deps'
       - name: Unit tests
         run: 'cargo test'
       - name: Build
