@@ -148,6 +148,8 @@ impl Transport {
 mod tests {
     use super::*;
     //use async_trait::async_trait;
+    #[allow(unused_imports)]
+    use futures::{AsyncReadExt, AsyncWriteExt};
 
     struct TestSignaling {
         label: &'static str,
@@ -202,6 +204,7 @@ mod tests {
                 let mut buf = vec![0; 32];
                 let n = conn.read(&mut buf).await.unwrap();
                 drop(conn);
+                let buf = &buf[0..n];
                 println!("moi {buf:?}");
                 there.stop().await.unwrap();
             }

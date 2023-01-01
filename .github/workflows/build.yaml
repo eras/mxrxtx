@@ -39,7 +39,12 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: 'cargo build --locked'
+      - name: Clippy
+        run: cargo clippy
+      - name: Unit tests
+        run: 'cargo test'
+      - name: Build
+        run: 'cargo build --locked'
       - uses: actions/upload-artifact@v2
         with:
           name: mxrxtx-${{ runner.os }}
