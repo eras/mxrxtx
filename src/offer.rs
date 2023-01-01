@@ -5,7 +5,6 @@ use crate::{
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
-use std::convert::TryFrom;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -50,24 +49,6 @@ pub enum Error {
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
 }
 
-enum RoomType {
-    RoomId,
-    RoomName,
-}
-
-impl RoomType {
-    fn classify(name: &str) -> Result<RoomType, Error> {
-        let ch0 = name.chars().next().unwrap();
-        if ch0 == '!' {
-            Ok(RoomType::RoomId)
-        } else if ch0 == '#' {
-            Ok(RoomType::RoomName)
-        } else {
-            Err(Error::RoomNameError(name.to_string()))
-        }
-    }
-}
-
 #[rustfmt::skip::macros(select)]
 pub async fn offer(
     config: config::Config,
@@ -92,31 +73,7 @@ pub async fn offer(
 
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
-    let room = match RoomType::classify(room)? {
-        RoomType::RoomId => {
-            let room_id = <&matrix_sdk::ruma::RoomId>::try_from(room)?.to_owned();
-            client
-                .get_joined_room(&room_id)
-                .ok_or(Error::NoSuchRoomError(String::from(room)))?
-        }
-        RoomType::RoomName => {
-            let rooms = client.joined_rooms();
-            println!("rooms: {:?}", rooms);
-            let room_alias = client
-                .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
-                .await
-                .unwrap();
-            let matching: Vec<&matrix_sdk::room::Joined> = rooms
-                .iter()
-                .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)
-                .collect();
-            match matching.len() {
-                1 => matching[0].clone(),
-                x if x > 1 => return Err(Error::MultipleRoomNameMatchesError(String::from(room))),
-                _ => return Err(Error::NoSuchRoomError(String::from(room))),
-            }
-        }
-    };
+    let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     println!("room: {:?}", room);
 
     let offer_files: Vec<protocol::File> = files
