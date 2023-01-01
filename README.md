@@ -5,6 +5,8 @@ Copyright: Erkki Seppälä <erkki.seppala@vincit.fi> 2022-2023
 You can contact me also [via
 Matrix](https://matrix.to/#/@flux:matrix.org).
 
+[![Build](https://github.com/eras/mxrxtx/actions/workflows/build.yaml/badge.svg)](https://github.com/eras/mxrxtx/actions/workflows/build.yaml)
+
 # `mxrxtx`—Matrix Receive and Transmit
 
 `mxrxtx` is a tool for transferring files with
