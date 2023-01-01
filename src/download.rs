@@ -1,5 +1,8 @@
 use crate::{
-    config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport::Transport,
+    config, matrix_common,
+    matrix_signaling::{MatrixSignaling, SessionInfo},
+    protocol,
+    transport::Transport,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -209,6 +212,7 @@ pub async fn download(
         .sled_store(state_dir, None)?
         .build()
         .await?;
+    let device_id = session.device_id.clone();
     client.restore_login(session).await?;
 
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
@@ -225,6 +229,7 @@ pub async fn download(
     let offer = serde_json::from_str::<protocol::SyncOffer>(event.event.json().get())?;
     println!("offer: {offer:?}");
 
+    let id = protocol::Uuid::new_v4();
     let peer_user_id = offer.sender().to_owned();
 
     let offer_content: protocol::OfferContent = match offer {
@@ -234,7 +239,17 @@ pub async fn download(
         }
     };
 
-    let signaling = MatrixSignaling::new(client.clone(), Some(peer_user_id)).await;
+    let signaling = MatrixSignaling::new(
+        client.clone(),
+        device_id,
+        event_id,
+        Some(SessionInfo {
+            peer_user_id,
+            peer_device_id: None,
+            id,
+        }),
+    )
+    .await;
     let transport = Transport::new(signaling).unwrap();
 
     let download_task = tokio::spawn({

@@ -92,6 +92,7 @@ pub async fn offer(
         .sled_store(state_dir, None)?
         .build()
         .await?;
+    let device_id = session.device_id.clone();
     client.restore_login(session).await?;
 
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
@@ -145,7 +146,7 @@ pub async fn offer(
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 
-    let signaling = MatrixSignaling::new(client.clone(), None).await;
+    let signaling = MatrixSignaling::new(client.clone(), device_id, event_id.clone(), None).await;
     let transport = Transport::new(signaling).unwrap();
 
     let task = tokio::spawn({

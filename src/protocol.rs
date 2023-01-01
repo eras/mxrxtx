@@ -1,12 +1,24 @@
+use matrix_sdk::ruma::events::macros::EventContent;
+use matrix_sdk::ruma::{OwnedDeviceId, OwnedEventId};
 use serde_derive::{Deserialize, Serialize};
 
-use matrix_sdk::ruma::events::macros::EventContent;
+pub type Uuid = uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, EventContent)]
+#[derive(Debug, Serialize, Deserialize, EventContent, Clone)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.webrtc", kind = ToDevice)]
 pub struct ToDeviceWebRtcContent {
-    // todo: include sender device id and session uuid
-    pub webrtc: String,
+    // unique id identifying this webrtc handshake
+    pub id: Uuid,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    // device id of the client sending this event; needed only on first contact
+    pub device_id: Option<OwnedDeviceId>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    // the event holding the OfferContent relevant to this session; needed only on first contact
+    pub event_id: Option<OwnedEventId>,
+
+    pub webrtc: String, // webrtc handshake data
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
