@@ -16,6 +16,12 @@ use tokio::{self, select};
 pub enum Error {
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
+
+    #[error(transparent)]
+    SendError(#[from] mpsc::SendError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,7 +36,7 @@ enum State {
 
 pub struct Transport {
     state: Option<State>,
-    worker: Option<tokio::task::JoinHandle<()>>,
+    worker: Option<tokio::task::JoinHandle<Result<(), Error>>>,
     stop_tx: Option<oneshot::Sender<()>>,
 }
 
@@ -40,7 +46,7 @@ async fn handle_signaling(
     mut tx_sig_inbound: mpsc::Sender<Message>,
     mut signaling: impl Signaling,
     mut rx_stop: oneshot::Receiver<()>,
-) {
+) -> Result<(), Error> {
     let mut closed = false;
     while !closed {
         select! {
@@ -48,7 +54,7 @@ async fn handle_signaling(
             	println!("handle_signaling: Wants to send something out: {sig:?}");
 		match sig {
 		    Some(msg) =>
-             		signaling.send(msg).await.unwrap(),
+             		signaling.send(msg).await?,
 		    None => {
 			println!("handle_signaling: Signaling channel is closed (rx_sig_outbound)");
 			closed = true;
@@ -59,7 +65,7 @@ async fn handle_signaling(
 		match sig {
 		    Ok(Some(msg)) => {
 			println!("handle_signaling: Received something in: {msg:?}");
-			tx_sig_inbound.send(msg).await.unwrap();
+			tx_sig_inbound.send(msg).await?;
 		    },
 		    Ok(None) => {
 			println!("handle_signaling: Signaling channel is closed (tx_sig_inbound)");
@@ -78,6 +84,7 @@ async fn handle_signaling(
         }
     }
     signaling.close().await;
+    Ok(())
 }
 
 impl Transport {
@@ -103,13 +110,18 @@ impl Transport {
     pub async fn stop(&mut self) -> Result<(), Error> {
         println!("Disconnecting");
         println!("Sending to stop_tx");
-        if let Err(()) = self.stop_tx.take().unwrap().send(()) {
+        if let Err(()) = self
+            .stop_tx
+            .take()
+            .expect("Stop must be called exactly once")
+            .send(())
+        {
             println!("Stop_tx peer already dropped");
         }
         println!("Done sending to stop_tx");
         self.state = None;
         if let Some(worker) = self.worker.take() {
-            worker.await.unwrap();
+            worker.await??;
         }
         println!("Done disconnecting");
         Ok(())
@@ -124,7 +136,7 @@ impl Transport {
                 Ok(stream)
             }
             _ => {
-                panic!("Nope");
+                panic!("connect: connect and accept must be called at most once");
             }
         }
     }
@@ -138,7 +150,7 @@ impl Transport {
                 Ok(stream)
             }
             _ => {
-                panic!("Nope");
+                panic!("connect: connect and accept must be called at most once");
             }
         }
     }

@@ -1,8 +1,7 @@
 use crate::{
     config, matrix_common,
     matrix_signaling::{MatrixSignaling, SessionInfo},
-    protocol,
-    transport::Transport,
+    protocol, transport,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -64,6 +63,12 @@ pub enum Error {
 
     #[error(transparent)]
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
+
+    #[error(transparent)]
+    TransportError(#[from] transport::Error),
+
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 #[derive(Error, Debug)]
@@ -124,11 +129,11 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
 
 pub async fn transfer(
     output_dir: String,
-    mut transport: Transport,
+    mut transport: transport::Transport,
     offer_content: protocol::OfferContent,
-) {
+) -> Result<(), Error> {
     println!("Connecting!");
-    let mut cn = transport.connect().await.unwrap();
+    let mut cn = transport.connect().await?;
     println!("Connected!");
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut eof = false;
@@ -169,14 +174,13 @@ pub async fn transfer(
                 if cur_file.is_none() {
                     let mut path = PathBuf::from(&output_dir);
                     path.push(&files[file_idx].name);
-                    let file = File::create(&path).unwrap();
+                    let file = File::create(&path)?;
                     cur_file = Some(file);
                 }
                 match &mut cur_file {
                     Some(cur_file) => {
                         cur_file
-                            .write_all(&buffer[buffer_offset..(buffer_offset + write_bytes)])
-                            .unwrap();
+                            .write_all(&buffer[buffer_offset..(buffer_offset + write_bytes)])?;
                         buffer_offset += write_bytes;
                         file_offset += write_bytes;
                         n -= write_bytes;
@@ -188,10 +192,11 @@ pub async fn transfer(
         dbg!();
     }
     println!("Exiting loop");
-    cn.write_all(b"ok").await.unwrap();
+    cn.write_all(b"ok").await?;
     println!("Stopping after receiving {total_bytes} bytes");
-    transport.stop().await.unwrap();
+    transport.stop().await?;
     println!("Stopped!");
+    Ok(())
 }
 
 #[rustfmt::skip::macros(select)]
@@ -215,7 +220,7 @@ pub async fn download(
     let device_id = session.device_id.clone();
     client.restore_login(session).await?;
 
-    let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
+    let first_sync_response = client.sync_once(sync_settings.clone()).await?;
 
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
     let room_id = get_room_id_from_uri(&uri)?;
@@ -250,7 +255,7 @@ pub async fn download(
         }),
     )
     .await;
-    let transport = Transport::new(signaling).unwrap();
+    let transport = transport::Transport::new(signaling)?;
 
     let download_task = tokio::spawn({
         let output_dir = String::from(output_dir);

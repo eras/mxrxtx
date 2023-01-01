@@ -46,58 +46,66 @@ impl MatrixSignaling {
                 let session_info = session_info.clone();
                 move |event: protocol::ToDeviceWebRtc| {
                     println!("MatrixSignaling: Cool: {event:?}");
-                    let message = serde_json::from_str(&event.content.webrtc).unwrap();
                     let events_tx = events_tx.clone();
                     let event_id = event_id.clone();
                     let session_info = session_info.clone();
                     async move {
-                        let mut session_info = session_info.lock().await;
-                        let id = event.content.id;
-                        let send;
-                        if event
-                            .content
-                            .event_id
-                            .clone()
-                            .map(|event_event_id| event_event_id == event_id)
-                            .unwrap_or(true)
-                        {
-                            match &*session_info {
-                                None => {
-                                    let peer_user_id = event.sender.to_owned();
-                                    let peer_device_id = event.content.device_id.clone();
-                                    *session_info = Some(SessionInfo {
-                                        peer_user_id,
-                                        peer_device_id,
-                                        id,
-                                    });
-                                    send = true;
-                                }
-                                Some(session_info) => {
-                                    if session_info.id != id {
-                                        println!(
-                                            "Ignoring event with unknown id {} vs current {}",
-                                            id, session_info.id
-                                        );
-                                        send = false;
-                                    } else {
-                                        send = true;
-                                    }
-                                }
+                        match serde_json::from_str(&event.content.webrtc) {
+                            Err(err) => {
+                                println!(
+                                    "MatrixSignaling: failed to deserialize message ({:?}), skipping",
+				    err
+                                );
                             }
-                        } else {
-                            println!(
-                                "Ignoring event with unknown event id {} vs current {}",
-                                &event
+                            Ok(message) => {
+                                let mut session_info = session_info.lock().await;
+                                let id = event.content.id;
+                                let send;
+                                if event
                                     .content
                                     .event_id
-                                    .expect("Previous condition should have made this impossible"),
-                                event_id
-                            );
-                            send = false;
-                        }
-                        if send {
-                            if let Err(err) = events_tx.lock().await.send(message).await {
-                                println!("Failed to send message: {err}");
+                                    .clone()
+                                    .map(|event_event_id| event_event_id == event_id)
+                                    .unwrap_or(true)
+                                {
+                                    match &*session_info {
+                                        None => {
+                                            let peer_user_id = event.sender.to_owned();
+                                            let peer_device_id = event.content.device_id.clone();
+                                            *session_info = Some(SessionInfo {
+                                                peer_user_id,
+                                                peer_device_id,
+                                                id,
+                                            });
+                                            send = true;
+                                        }
+                                        Some(session_info) => {
+                                            if session_info.id != id {
+                                                println!(
+						    "Ignoring event with unknown id {} vs current {}",
+						    id, session_info.id
+						);
+                                                send = false;
+                                            } else {
+                                                send = true;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    println!(
+                                        "Ignoring event with unknown event id {} vs current {}",
+                                        &event.content.event_id.expect(
+                                            "Previous condition should have made this impossible"
+                                        ),
+                                        event_id
+                                    );
+                                    send = false;
+                                }
+                                if send {
+                                    if let Err(err) = events_tx.lock().await.send(message).await {
+                                        println!("Failed to send message: {err}");
+                                    }
+                                }
                             }
                         }
                     }
@@ -130,7 +138,7 @@ impl Signaling for MatrixSignaling {
             type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
 
             let webrtc = protocol::ToDeviceWebRtcContent {
-                webrtc: serde_json::to_string(&message).unwrap(),
+                webrtc: serde_json::to_string(&message)?,
                 id: session_info.id,
                 device_id: if self.first_send {
                     Some(self.device_id.clone())

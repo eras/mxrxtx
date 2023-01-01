@@ -82,7 +82,9 @@ async fn transfer_file() {
                 }
                 files.push(file_path.to_path_buf());
             }
-            offer::transfer(files, transport).await;
+            offer::transfer(files, transport)
+                .await
+                .map_err(anyhow::Error::from)
         }
     });
     let download_task = tokio::spawn({
@@ -94,13 +96,22 @@ async fn transfer_file() {
                 let download_tmp_dir = download_tmp_dir.lock().await;
                 String::from(download_tmp_dir.as_ref().unwrap().path().to_str().unwrap())
             };
-            download::transfer(download_path, transport, offer_content).await;
+            download::transfer(download_path, transport, offer_content)
+                .await
+                .map_err(anyhow::Error::from)
         }
     });
     let mut handles = vec![];
     handles.push(offer_task);
     handles.push(download_task);
-    futures::future::join_all(handles).await;
+    for retval in futures::future::join_all(handles).await {
+        match retval.unwrap() {
+            Ok(()) => (),
+            Err(err) => {
+                panic!("task failed: {:?}", err)
+            }
+        }
+    }
     {
         let offer_tmp_dir = offer_tmp_dir.lock().await;
         let download_tmp_dir = download_tmp_dir.lock().await;

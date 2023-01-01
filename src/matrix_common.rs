@@ -34,7 +34,10 @@ enum RoomType {
 
 impl RoomType {
     fn classify(name: &str) -> Result<RoomType, Error> {
-        let ch0 = name.chars().next().unwrap();
+        let ch0 = name
+            .chars()
+            .next()
+            .expect("Room name should have at least one character");
         if ch0 == '!' {
             Ok(RoomType::RoomId)
         } else if ch0 == '#' {
@@ -80,8 +83,7 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
             println!("rooms: {:?}", rooms);
             let room_alias = client
                 .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
-                .await
-                .unwrap();
+                .await?;
             let matching: Vec<&matrix_sdk::room::Joined> = rooms
                 .iter()
                 .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)

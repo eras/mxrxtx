@@ -1,6 +1,4 @@
-use crate::{
-    config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport::Transport,
-};
+use crate::{config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport};
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
@@ -45,31 +43,44 @@ pub enum Error {
 
     #[error(transparent)]
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
+
+    #[error(transparent)]
+    TransportError(#[from] transport::Error),
+
+    #[error(transparent)]
+    MatrixUriGenError(#[from] matrix_uri::MatrixUriGenError),
+
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
-pub async fn transfer(files: Vec<PathBuf>, mut transport: Transport) {
+pub async fn transfer(
+    files: Vec<PathBuf>,
+    mut transport: transport::Transport,
+) -> Result<(), Error> {
     println!("Accepting!");
-    let mut cn = transport.accept().await.unwrap();
+    let mut cn = transport.accept().await?;
     println!("Accepted!");
     let mut buffer: [u8; 1024] = [0; 1024];
     for file in files {
-        let mut file = File::open(file).unwrap();
+        let mut file = File::open(file)?;
         let mut eof = false;
         while !eof {
-            let n = file.read(&mut buffer).unwrap();
+            let n = file.read(&mut buffer)?;
             dbg!(n);
             if n > 0 {
-                cn.write_all(&buffer[0..n]).await.unwrap();
+                cn.write_all(&buffer[0..n]).await?;
             } else {
                 eof = true;
             }
         }
     }
     println!("Waiting ack");
-    cn.read_exact(&mut buffer[0..2]).await.unwrap();
+    cn.read_exact(&mut buffer[0..2]).await?;
     println!("Received ack, stopping");
-    transport.stop().await.unwrap();
+    transport.stop().await?;
     println!("Stopped!");
+    Ok(())
 }
 
 #[rustfmt::skip::macros(select)]
@@ -95,19 +106,24 @@ pub async fn offer(
     let device_id = session.device_id.clone();
     client.restore_login(session).await?;
 
-    let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
+    let first_sync_response = client.sync_once(sync_settings.clone()).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     println!("room: {:?}", room);
 
     let offer_files: Vec<protocol::File> = files
         .iter()
-        .map(|file| protocol::File {
-            name: file.to_string(),
-            content_type: String::from("application/octet-stream"),
-            size: fs::metadata(Path::new(&file)).unwrap().len(), // TODO: respect this when sending file
+        .map(|file| {
+            fs::metadata(Path::new(&file)).map(|metadata| protocol::File {
+                name: file.to_string(),
+                content_type: String::from("application/octet-stream"),
+                size: metadata.len(), // TODO: respect this when sending file
+            })
         })
-        .collect();
+        .try_fold(Vec::new(), |mut acc: Vec<protocol::File>, file_result| {
+            acc.push(file_result?);
+            Result::<_, Error>::Ok(acc)
+        })?;
 
     let offer = protocol::OfferContent { files: offer_files };
 
@@ -132,8 +148,7 @@ pub async fn offer(
         None,
         None,
         None,
-    )
-    .unwrap();
+    )?;
 
     println!(
         "Offer for {} started; press ctrl-c to redact",
@@ -147,7 +162,7 @@ pub async fn offer(
         .token(first_sync_response.next_batch);
 
     let signaling = MatrixSignaling::new(client.clone(), device_id, event_id.clone(), None).await;
-    let transport = Transport::new(signaling).unwrap();
+    let transport = transport::Transport::new(signaling)?;
 
     let task = tokio::spawn({
         let files: Vec<PathBuf> = files
