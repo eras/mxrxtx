@@ -3,6 +3,7 @@ use crate::{
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
+use matrix_sdk::ruma::{OwnedEventId, OwnedRoomId};
 use matrix_sdk::Client;
 use std::cmp;
 use std::convert::TryFrom;
@@ -76,6 +77,45 @@ fn mxid_uri_from_mxid(mxid: &matrix_uri::MatrixId) -> String {
     }
 }
 
+fn get_room_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedRoomId, Error> {
+    match &uri.mxid.id_type {
+        matrix_uri::IdType::RoomId => {
+            let mxid = mxid_uri_from_mxid(&uri.mxid);
+            Ok(<&matrix_sdk::ruma::RoomId>::try_from(mxid.as_str())?.to_owned())
+        }
+        _ => {
+            return Err(Error::MatrixUriIsNotRoomIdError(format!(
+                "{:?}",
+                uri.mxid.id_type
+            )))
+        }
+    }
+}
+
+fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Error> {
+    let event_id = match &uri.child_mxid {
+        Some(child_mxid) => match child_mxid.id_type {
+            matrix_uri::IdType::EventId => {
+                <&matrix_sdk::ruma::EventId>::try_from(mxid_uri_from_mxid(child_mxid).as_str())?
+                    .to_owned()
+            }
+            _ => {
+                return Err(Error::MatrixUriMissingEventIdError(format!(
+                    "{:?}",
+                    child_mxid.id_type
+                )))
+            }
+        },
+        _ => {
+            return Err(Error::MatrixUriMissingEventIdError(format!(
+                "{:?}",
+                uri.mxid.id_type
+            )))
+        }
+    };
+    Ok(event_id)
+}
+
 #[rustfmt::skip::macros(select)]
 pub async fn download(
     config: config::Config,
@@ -99,46 +139,12 @@ pub async fn download(
     let first_sync_response = client.sync_once(sync_settings.clone()).await.unwrap();
 
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
-    let mxid = mxid_uri_from_mxid(&uri.mxid);
-    let room_id = match uri.mxid.id_type {
-        matrix_uri::IdType::RoomId => {
-            <&matrix_sdk::ruma::RoomId>::try_from(mxid.as_str())?.to_owned()
-        }
-        _ => {
-            return Err(Error::MatrixUriIsNotRoomIdError(format!(
-                "{:?}",
-                uri.mxid.id_type
-            )))
-        }
-    };
-    let event_id = match uri.child_mxid {
-        Some(child_mxid) => match child_mxid.id_type {
-            matrix_uri::IdType::EventId => {
-                <&matrix_sdk::ruma::EventId>::try_from(mxid_uri_from_mxid(&child_mxid).as_str())?
-                    .to_owned()
-            }
-            _ => {
-                return Err(Error::MatrixUriMissingEventIdError(format!(
-                    "{:?}",
-                    child_mxid.id_type
-                )))
-            }
-        },
-        _ => {
-            return Err(Error::MatrixUriMissingEventIdError(format!(
-                "{:?}",
-                uri.mxid.id_type
-            )))
-        }
-    };
-
-    // needed to populate Client internal data
-    //let _rooms = matrix_common::get_joined_rooms(&client).await?;
-    // let room_id = <&matrix_sdk::ruma::RoomId>::try_from(room_id.as_str())?.to_owned();
+    let room_id = get_room_id_from_uri(&uri)?;
     let room = client
         .get_joined_room(&room_id)
         .ok_or(Error::NoSuchRoomError(String::from(room_id.as_str())))?;
 
+    let event_id = get_event_id_from_uri(&uri)?;
     let event = room.event(event_id.as_ref()).await?;
 
     let offer = serde_json::from_str::<protocol::SyncOffer>(event.event.json().get())?;
