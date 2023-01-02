@@ -115,7 +115,7 @@ mod console {
     pub fn read_line(stdin: &mut StdinLock) -> Result<Option<String>, super::Error> {
         let mut buffer = String::new();
         BufRead::read_line(stdin, &mut buffer)?;
-        Ok(Some(buffer))
+        Ok(Some(buffer.trim_end().to_string()))
     }
 }
 
