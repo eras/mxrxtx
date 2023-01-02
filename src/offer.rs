@@ -18,28 +18,13 @@ pub enum Error {
     RumaError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
-    RumaIdentifierError(#[from] ruma_identifiers::Error),
-
-    #[error(transparent)]
     MatrixHttpError(#[from] matrix_sdk::HttpError),
 
     #[error(transparent)]
     MatrixCommonError(#[from] matrix_common::Error),
 
-    #[error("Matrix room not found: {}", .0)]
-    NoSuchRoomError(String),
-
-    #[error("Multiple matrix rooms matching pattern found: {}", .0)]
-    MultipleRoomNameMatchesError(String),
-
-    #[error("Room id/name must start with either ! or #: {}", .0)]
-    RoomNameError(String),
-
     #[error(transparent)]
     MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
-
-    #[error(transparent)]
-    IdParseError(#[from] ruma::IdParseError),
 
     #[error(transparent)]
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),

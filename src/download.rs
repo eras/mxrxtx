@@ -26,9 +26,6 @@ pub enum Error {
     RumaError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
-    RumaIdentifierError(#[from] ruma_identifiers::Error),
-
-    #[error(transparent)]
     MatrixUriParseError(#[from] MatrixUriParseError),
 
     #[error("Matrix uri does not have a room id: {}", .0)]
@@ -39,15 +36,6 @@ pub enum Error {
 
     #[error("Offer was redacted")]
     OfferRedactedError,
-
-    #[error("Event is not a message: {}", .0)]
-    NotAMessageEventError(String),
-
-    #[error(transparent)]
-    MatrixHttpError(#[from] matrix_sdk::HttpError),
-
-    #[error(transparent)]
-    MatrixCommonError(#[from] matrix_common::Error),
 
     #[error("Matrix room not found: {}", .0)]
     NoSuchRoomError(String),
