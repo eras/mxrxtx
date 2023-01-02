@@ -82,9 +82,17 @@ impl std::fmt::Display for MatrixUriParseError {
 
 fn mxid_from_mxid_uri(mxid: &matrix_uri::MatrixId) -> String {
     // I don't understand when the sigil is or isn't there..
-    match mxid.id_type {
-        matrix_uri::IdType::RoomAlias => format!("{}{}", mxid.id_type.to_sigil(), mxid.body),
-        _ => mxid.body.clone(),
+    match mxid.body.chars().next() {
+        Some('!' | '%' | '$' | '+' | '#' | '@') => mxid.body.clone(),
+        Some(_) => match mxid.id_type {
+            matrix_uri::IdType::RoomAlias
+            | matrix_uri::IdType::RoomId
+            | matrix_uri::IdType::EventId => {
+                format!("{}{}", mxid.id_type.to_sigil(), mxid.body)
+            }
+            _ => mxid.body.clone(),
+        },
+        None => "".to_string(),
     }
 }
 
