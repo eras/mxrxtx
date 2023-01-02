@@ -5,22 +5,8 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-const DEBUG_LOG_FILE: &str = "mxrxtx.log";
-
-#[derive(Error, Debug)]
-pub enum LoggingSetupError {
-    #[error(transparent)]
-    InitLoggingError(#[from] log4rs::config::InitError),
-
-    #[error(transparent)]
-    LogFileOpenError(#[from] std::io::Error),
-}
-
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    LoggingSetupError(#[from] LoggingSetupError),
-
     #[error("Failure to process path: {}", .0)]
     UnsupportedPath(String),
 
@@ -38,33 +24,6 @@ pub enum Error {
 
     #[error(transparent)]
     DownloadError(#[from] download::Error),
-}
-
-fn init_logging(enable: bool) -> Result<(), LoggingSetupError> {
-    if !enable {
-        return Ok(());
-    }
-    use log::LevelFilter;
-    use log4rs::append::file::FileAppender;
-    use log4rs::config::{Appender, Config, Root};
-    use log4rs::encode::pattern::PatternEncoder;
-
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} {l} {M} {m}\n")))
-        .build(DEBUG_LOG_FILE)?;
-
-    let config = Config::builder()
-        .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .build(
-            Root::builder()
-                .appender("logfile")
-                .build(LevelFilter::Debug),
-        )
-        .map_err(log4rs::config::InitError::BuildConfig)?;
-
-    log4rs::init_config(config).map_err(log4rs::config::InitError::SetLogger)?;
-
-    Ok(())
 }
 
 fn project_dir() -> Option<ProjectDirs> {
@@ -133,6 +92,8 @@ fn get_state_dir(state_dir_arg: Option<&str>) -> Result<String, Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=info"))
+        .init();
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
 	.before_help("Licensed under the MIT license")
@@ -177,11 +138,6 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 ),
         )
         .arg(
-            clap::Arg::new("debug")
-                .long("debug")
-		.help(format!("Enable debug logging to {}", DEBUG_LOG_FILE).as_str()),
-        )
-        .arg(
             clap::Arg::new("setup")
                 .long("setup")
                 .help("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
@@ -208,8 +164,6 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                .args(&["offer", "download", "setup"])
                .required(true))
         .get_matches();
-
-    init_logging(args.is_present("debug"))?;
 
     let config_file = get_config_file(args.value_of("config"))?;
     let config = config::Config::load(&config_file)?;
