@@ -80,7 +80,7 @@ impl std::fmt::Display for MatrixUriParseError {
     }
 }
 
-fn mxid_uri_from_mxid(mxid: &matrix_uri::MatrixId) -> String {
+fn mxid_from_mxid_uri(mxid: &matrix_uri::MatrixId) -> String {
     // I don't understand when the sigil is or isn't there..
     match mxid.id_type {
         matrix_uri::IdType::RoomAlias => format!("{}{}", mxid.id_type.to_sigil(), mxid.body),
@@ -91,7 +91,7 @@ fn mxid_uri_from_mxid(mxid: &matrix_uri::MatrixId) -> String {
 fn get_room_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedRoomId, Error> {
     match &uri.mxid.id_type {
         matrix_uri::IdType::RoomId => {
-            let mxid = mxid_uri_from_mxid(&uri.mxid);
+            let mxid = mxid_from_mxid_uri(&uri.mxid);
             Ok(<&matrix_sdk::ruma::RoomId>::try_from(mxid.as_str())?.to_owned())
         }
         _ => {
@@ -107,7 +107,7 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
     let event_id = match &uri.child_mxid {
         Some(child_mxid) => match child_mxid.id_type {
             matrix_uri::IdType::EventId => {
-                <&matrix_sdk::ruma::EventId>::try_from(mxid_uri_from_mxid(child_mxid).as_str())?
+                <&matrix_sdk::ruma::EventId>::try_from(mxid_from_mxid_uri(child_mxid).as_str())?
                     .to_owned()
             }
             _ => {
