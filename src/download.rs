@@ -17,6 +17,9 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::{self, select};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -128,9 +131,9 @@ pub async fn transfer(
     mut transport: transport::Transport,
     offer_content: protocol::OfferContent,
 ) -> Result<(), Error> {
-    println!("Connecting!");
+    debug!("Connecting!");
     let mut cn = transport.connect().await?;
-    println!("Connected!");
+    debug!("Connected!");
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut eof = false;
     let mut total_bytes = 0;
@@ -144,7 +147,7 @@ pub async fn transfer(
         let mut n = match cn.read(&mut buffer).await {
             Ok(x) => x,
             Err(err) => {
-                println!("Error receiving: {err}");
+                error!("Error receiving: {err}");
                 // TODO: this probably happens because peer immediately closes after sending
                 // everything we should acknowledge the transfer explicitly, because
                 // otherwise if there is a network error, we might lose the end
@@ -154,22 +157,18 @@ pub async fn transfer(
         total_bytes += n;
         eof = n == 0;
         let mut buffer_offset = 0usize;
-        dbg!(n);
         while n > 0 && file_idx < files.len() {
-            dbg!(file_idx);
             let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
-            dbg!(cur_bytes_remaining);
             if cur_bytes_remaining == 0 {
-                dbg!();
                 cur_file = None;
                 file_idx += 1;
                 file_offset = 0usize;
             } else {
                 let write_bytes = cmp::min(cur_bytes_remaining, n);
-                dbg!(write_bytes);
                 if cur_file.is_none() {
                     let mut path = PathBuf::from(&output_dir);
                     path.push(&files[file_idx].name);
+                    info!("Downloading {:?}", &path);
                     let file = File::create(&path)?;
                     cur_file = Some(file);
                 }
@@ -185,13 +184,12 @@ pub async fn transfer(
                 }
             }
         }
-        dbg!();
     }
-    println!("Exiting loop");
+    debug!("Exiting loop");
     cn.write_all(b"ok").await?;
-    println!("Stopping after receiving {total_bytes} bytes");
+    debug!("Stopping after receiving {total_bytes} bytes");
     transport.stop().await?;
-    println!("Stopped!");
+    info!("Transport stopped");
     Ok(())
 }
 
@@ -228,7 +226,7 @@ pub async fn download(
     let event = room.event(event_id.as_ref()).await?;
 
     let offer = serde_json::from_str::<protocol::SyncOffer>(event.event.json().get())?;
-    println!("offer: {offer:?}");
+    debug!("offer: {offer:?}");
 
     let id = protocol::Uuid::new_v4();
     let peer_user_id = offer.sender().to_owned();

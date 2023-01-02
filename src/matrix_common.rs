@@ -80,7 +80,6 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
         }
         RoomType::RoomName => {
             let rooms = client.joined_rooms();
-            println!("rooms: {:?}", rooms);
             let room_alias = client
                 .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
                 .await?;

@@ -232,7 +232,6 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
             .expect("clap arguments should ensure this");
         let room = &args[0];
         let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
-        println!("files: {:?}", files);
         offer::offer(config, &state_dir, room, files).await?;
     } else {
         panic!("Clap group should ensure at least one of these is set..");

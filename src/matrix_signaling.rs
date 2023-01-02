@@ -10,6 +10,9 @@ use ruma_client_api;
 use std::sync::Arc;
 use tokio::{self, sync::Mutex};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
+
 #[derive(Clone, Debug)]
 pub struct SessionInfo {
     pub peer_user_id: OwnedUserId,
@@ -45,14 +48,14 @@ impl MatrixSignaling {
                 let event_id = event_id.clone();
                 let session_info = session_info.clone();
                 move |event: protocol::ToDeviceWebRtc| {
-                    println!("MatrixSignaling: Cool: {event:?}");
+                    debug!("MatrixSignaling: Cool: {event:?}");
                     let events_tx = events_tx.clone();
                     let event_id = event_id.clone();
                     let session_info = session_info.clone();
                     async move {
                         match serde_json::from_str(&event.content.webrtc) {
                             Err(err) => {
-                                println!(
+                                error!(
                                     "MatrixSignaling: failed to deserialize message ({:?}), skipping",
 				    err
                                 );
@@ -81,7 +84,7 @@ impl MatrixSignaling {
                                         }
                                         Some(session_info) => {
                                             if session_info.id != id {
-                                                println!(
+                                                error!(
 						    "Ignoring event with unknown id {} vs current {}",
 						    id, session_info.id
 						);
@@ -92,7 +95,7 @@ impl MatrixSignaling {
                                         }
                                     }
                                 } else {
-                                    println!(
+                                    error!(
                                         "Ignoring event with unknown event id {} vs current {}",
                                         &event.content.event_id.expect(
                                             "Previous condition should have made this impossible"
@@ -103,7 +106,7 @@ impl MatrixSignaling {
                                 }
                                 if send {
                                     if let Err(err) = events_tx.lock().await.send(message).await {
-                                        println!("Failed to send message: {err}");
+                                        error!("Failed to send message: {err}");
                                     }
                                 }
                             }
@@ -127,7 +130,7 @@ impl MatrixSignaling {
 #[async_trait]
 impl Signaling for MatrixSignaling {
     async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
-        println!("MatrixSignaling: send: {message:?}");
+        debug!("MatrixSignaling: send: {message:?}");
         if let Some(session_info) = self.session_info.lock().await.clone() {
             let txn_id = ruma::TransactionId::new();
             use ruma::events::AnyToDeviceEventContent;
@@ -174,11 +177,9 @@ impl Signaling for MatrixSignaling {
                 messages,
             );
 
-            println!("MatrixSignaling: send locking");
             self.client.send(request, None).await?;
-            println!("MatrixSignaling: done sending");
         } else {
-            println!("MatrixSignaling: no peer user id, cannot send");
+            error!("MatrixSignaling: no peer user id, cannot send");
         }
         Ok(())
     }
@@ -186,15 +187,15 @@ impl Signaling for MatrixSignaling {
     // vai sittenkin callback?
     async fn recv(&mut self) -> Result<Option<Message>, anyhow::Error> {
         let x = self.events_rx.next().await;
-        println!("MatrixSignaling: recv: {x:?}");
+        debug!("MatrixSignaling: recv: {x:?}");
         Ok(x)
     }
 
     async fn close(mut self) {
-        println!("MatrixSignaling: closing");
+        debug!("MatrixSignaling: closing");
         if let Some(x) = self.handler_handle.lock().await.take() {
             self.client.remove_event_handler(x);
         }
-        println!("MatrixSignaling: closed");
+        debug!("MatrixSignaling: closed");
     }
 }

@@ -1,16 +1,16 @@
 use crate::signaling::Signaling;
 use anyhow;
-use thiserror::Error;
-
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
 use async_datachannel::{DataStream, Message, PeerConnection, RtcConfig};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use futures::SinkExt;
-
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::{self, select};
+use uuid::Uuid;
+
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -51,12 +51,12 @@ async fn handle_signaling(
     while !closed {
         select! {
             sig = rx_sig_outbound.next() => {
-            	println!("handle_signaling: Wants to send something out: {sig:?}");
+            	debug!("handle_signaling: Wants to send something out: {sig:?}");
 		match sig {
 		    Some(msg) =>
              		signaling.send(msg).await?,
 		    None => {
-			println!("handle_signaling: Signaling channel is closed (rx_sig_outbound)");
+			debug!("handle_signaling: Signaling channel is closed (rx_sig_outbound)");
 			closed = true;
 		    }
 		}
@@ -64,21 +64,21 @@ async fn handle_signaling(
             sig = signaling.recv() => {
 		match sig {
 		    Ok(Some(msg)) => {
-			println!("handle_signaling: Received something in: {msg:?}");
+			debug!("handle_signaling: Received something in: {msg:?}");
 			tx_sig_inbound.send(msg).await?;
 		    },
 		    Ok(None) => {
-			println!("handle_signaling: Signaling channel is closed (tx_sig_inbound)");
+			debug!("handle_signaling: Signaling channel is closed (tx_sig_inbound)");
 			closed = true;
 		    }
 		    Err(err) => {
-			println!("handle_signaling: Signaling channel is closed due to error: {err:?}");
+			debug!("handle_signaling: Signaling channel is closed due to error: {err:?}");
 			closed = true;
 		    }
 		}
             }
 	    sig = &mut rx_stop => {
-		println!("handle_signaling: Received stop_tx signal {sig:?}, exiting");
+		debug!("handle_signaling: Received stop_tx signal {sig:?}, exiting");
 		closed = true;
 	    }
         }
@@ -108,31 +108,31 @@ impl Transport {
     //async fn start(&mut self) {}
 
     pub async fn stop(&mut self) -> Result<(), Error> {
-        println!("Disconnecting");
-        println!("Sending to stop_tx");
+        info!("Disconnecting");
+        debug!("Sending to stop_tx");
         if let Err(()) = self
             .stop_tx
             .take()
             .expect("Stop must be called exactly once")
             .send(())
         {
-            println!("Stop_tx peer already dropped");
+            debug!("Stop_tx peer already dropped");
         }
-        println!("Done sending to stop_tx");
+        debug!("Done sending to stop_tx");
         self.state = None;
         if let Some(worker) = self.worker.take() {
             worker.await??;
         }
-        println!("Done disconnecting");
+        debug!("Done disconnecting");
         Ok(())
     }
 
     pub async fn connect(&mut self) -> Result<DataStream, Error> {
-        println!("Dialing connection");
+        info!("Connecting");
         match &self.state {
             Some(State::PeerConnection(peer_connection)) => {
                 let stream = (*peer_connection).dial("hello").await?;
-                println!("Pretty cool, dialed a connection");
+                debug!("Pretty cool, dialed a connection");
                 Ok(stream)
             }
             _ => {
@@ -142,11 +142,11 @@ impl Transport {
     }
 
     pub async fn accept(&mut self) -> Result<DataStream, Error> {
-        println!("Accepting connection");
+        info!("Accepting connection");
         match &mut self.state {
             Some(State::PeerConnection(peer_connection)) => {
                 let stream = (*peer_connection).accept().await?;
-                println!("Pretty cool, accepted a connection");
+                debug!("Pretty cool, accepted a connection");
                 Ok(stream)
             }
             _ => {

@@ -1,12 +1,11 @@
-use std::io::{stdin, stdout, Write};
-
 use crate::config;
-
+use matrix_sdk::Client;
 use std::convert::TryFrom;
-
+use std::io::{stdin, stdout, Write};
 use thiserror::Error;
 
-use matrix_sdk::Client;
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -125,7 +124,7 @@ pub async fn setup_mode(
     config.device_id = login.device_id.to_string();
     config.save(config_file)?;
 
-    println!("Login successful. Saved configuration to {}", config_file);
+    info!("Login successful. Saved configuration to {}", config_file);
 
     Ok(())
 }

@@ -9,6 +9,9 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -43,16 +46,15 @@ pub async fn transfer(
     files: Vec<PathBuf>,
     mut transport: transport::Transport,
 ) -> Result<(), Error> {
-    println!("Accepting!");
+    debug!("Accepting!");
     let mut cn = transport.accept().await?;
-    println!("Accepted!");
+    debug!("Accepted!");
     let mut buffer: [u8; 1024] = [0; 1024];
     for file in files {
         let mut file = File::open(file)?;
         let mut eof = false;
         while !eof {
             let n = file.read(&mut buffer)?;
-            dbg!(n);
             if n > 0 {
                 cn.write_all(&buffer[0..n]).await?;
             } else {
@@ -60,11 +62,11 @@ pub async fn transfer(
             }
         }
     }
-    println!("Waiting ack");
+    debug!("Waiting ack");
     cn.read_exact(&mut buffer[0..2]).await?;
-    println!("Received ack, stopping");
+    debug!("Received ack, stopping");
     transport.stop().await?;
-    println!("Stopped!");
+    info!("Transfer stopped");
     Ok(())
 }
 
@@ -75,9 +77,7 @@ pub async fn offer(
     room: &str,
     files: Vec<&str>,
 ) -> Result<(), Error> {
-    dbg!();
     let session = config.get_matrix_session()?;
-    dbg!();
 
     let filter = matrix_common::just_joined_rooms_filter();
     let sync_settings = SyncSettings::default()
@@ -94,7 +94,7 @@ pub async fn offer(
     let first_sync_response = client.sync_once(sync_settings.clone()).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
-    println!("room: {:?}", room);
+    debug!("room: {:?}", room);
 
     let offer_files: Vec<protocol::File> = files
         .iter()
@@ -161,14 +161,14 @@ pub async fn offer(
 	_exit = task => (),
     }
 
-    println!("Redacting offer");
+    info!("Redacting offer");
     room.redact(
         &event_id,
         Some("Offer expired"),
         Some(ruma::TransactionId::new()),
     )
     .await?;
-    println!("Done");
+    debug!("Done");
 
     Ok(())
 }
