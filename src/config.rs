@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -13,6 +13,7 @@ pub struct Config {
     pub access_token: String,
     pub device_id: String,
     pub refresh_token: Option<String>,
+    pub state_dir: PathBuf,
 }
 
 #[derive(Error, Debug)]
@@ -81,7 +82,7 @@ impl Config {
             }
             Err(error) => return Err(Error::TomlDeError(error)),
         };
-        log::info!("Loaded config from {}", filename);
+        log::debug!("Loaded config from {}", filename);
         Ok(config)
     }
 
@@ -92,7 +93,7 @@ impl Config {
         let contents = toml::to_string(&self)?;
         let writer = atomicwrites::AtomicFile::new(filename, atomicwrites::AllowOverwrite);
         writer.write(|f| f.write_all(contents.as_bytes()))?;
-        log::info!("Wrote config to {}", filename);
+        log::debug!("Wrote config to {}", filename);
         Ok(())
     }
 

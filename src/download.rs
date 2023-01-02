@@ -196,7 +196,6 @@ pub async fn transfer(
 #[rustfmt::skip::macros(select)]
 pub async fn download(
     config: config::Config,
-    state_dir: &str,
     urls: Vec<&str>,
     output_dir: &str,
 ) -> Result<(), Error> {
@@ -208,7 +207,7 @@ pub async fn download(
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
-        .sled_store(state_dir, None)?
+        .sled_store(config.state_dir, None)?
         .build()
         .await?;
     let device_id = session.device_id.clone();

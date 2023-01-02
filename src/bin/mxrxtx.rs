@@ -1,15 +1,10 @@
 #![deny(clippy::all)]
-use directories_next::ProjectDirs;
 use mxrxtx::{config, download, offer, setup, version::get_version};
-use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Failure to process path: {}", .0)]
-    UnsupportedPath(String),
-
     #[error(transparent)]
     ConfigError(#[from] config::Error),
 
@@ -25,70 +20,6 @@ pub enum Error {
     #[error(transparent)]
     DownloadError(#[from] download::Error),
 }
-
-fn project_dir() -> Option<ProjectDirs> {
-    ProjectDirs::from("", "Erkki Seppälä", "mxrxtx")
-}
-
-fn get_path_logic<SelectPathFn>(
-    path_arg: Option<&str>,
-    select_path: SelectPathFn,
-) -> Result<String, Error>
-where
-    SelectPathFn: Fn(&ProjectDirs) -> PathBuf,
-{
-    let joined_pathbuf;
-    let joined_path;
-    // argument overrides all automation
-    let path: &Path = if let Some(path) = path_arg {
-        Path::new(path)
-    } else {
-        let path = Path::new(&config::FILENAME);
-        // does the default config filename exist? if so, go with that
-        let path: &Path = if path.exists() {
-            path
-        } else {
-            // otherwise, choose the XDG directory if it can be created
-            (if let Some(proj_dirs) = project_dir() {
-                joined_pathbuf = select_path(&proj_dirs);
-                joined_path = joined_pathbuf.as_path();
-                Some(&joined_path)
-            } else {
-                None
-            })
-            .unwrap_or(&path)
-        };
-        path
-    };
-    let path = if let Some(path) = path.to_str() {
-        path
-    } else {
-        return Err(Error::UnsupportedPath(
-            "Sorry, unsupported config file path (needs to be legal UTF8)".to_string(),
-        ));
-    };
-    Ok(path.to_string())
-}
-
-fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
-    get_path_logic(config_file_arg, |project_dirs| {
-        project_dirs.config_dir().join("mxrxtx.ini")
-    })
-}
-
-fn get_state_dir(state_dir_arg: Option<&str>) -> Result<String, Error> {
-    get_path_logic(state_dir_arg, |project_dirs| {
-        project_dirs.cache_dir().into()
-    })
-}
-
-// fn get_state_dir(state_dir_arg: Option<&str>) -> Result<String, Error> {
-//     // The location to save files to
-//     let home = dirs::home_dir()
-//         .expect("no home directory found")
-//         .join("party_bot");
-//     client_builder = client_builder.sled_store(home, None)?;
-// }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -111,7 +42,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .help(
                     format!(
                         "Config file to load, defaults to {}",
-                        get_config_file(None)?
+                        setup::get_config_file(None)?
                     )
                     .as_str(),
                 ),
@@ -123,18 +54,6 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .default_value(".")
                 .help(
                     "Directory to use for downloading, defaults to ."
-                ),
-        )
-        .arg(
-            clap::Arg::new("state")
-                .long("state")
-                .takes_value(true)
-                .help(
-                    format!(
-                        "State directory to use, defaults to {}",
-                        get_state_dir(None)?
-                    )
-                    .as_str(),
                 ),
         )
         .arg(
@@ -165,10 +84,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                .required(true))
         .get_matches();
 
-    let config_file = get_config_file(args.value_of("config"))?;
+    let config_file = setup::get_config_file(args.value_of("config"))?;
     let config = config::Config::load(&config_file)?;
-
-    let state_dir = get_state_dir(args.value_of("state"))?;
 
     let output_dir = args.value_of("output-dir").unwrap();
 
@@ -179,14 +96,14 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
             .values_of_t("download")
             .expect("clap arguments should ensure this");
         let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-        download::download(config, &state_dir, urls, output_dir).await?;
+        download::download(config, urls, output_dir).await?;
     } else if args.is_present("offer") {
         let args: Vec<String> = args
             .values_of_t("offer")
             .expect("clap arguments should ensure this");
         let room = &args[0];
         let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
-        offer::offer(config, &state_dir, room, files).await?;
+        offer::offer(config, room, files).await?;
     } else {
         panic!("Clap group should ensure at least one of these is set..");
     }

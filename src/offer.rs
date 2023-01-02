@@ -71,12 +71,7 @@ pub async fn transfer(
 }
 
 #[rustfmt::skip::macros(select)]
-pub async fn offer(
-    config: config::Config,
-    state_dir: &str,
-    room: &str,
-    files: Vec<&str>,
-) -> Result<(), Error> {
+pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
     let session = config.get_matrix_session()?;
 
     let filter = matrix_common::just_joined_rooms_filter();
@@ -85,7 +80,7 @@ pub async fn offer(
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
-        .sled_store(state_dir, None)?
+        .sled_store(config.state_dir, None)?
         .build()
         .await?;
     let device_id = session.device_id.clone();
