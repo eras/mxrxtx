@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 pub mod config;
 pub mod download;
 pub mod level_event;

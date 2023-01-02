@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 use directories_next::ProjectDirs;
 use mxrxtx::{config, download, offer, setup, version::get_version};
 use std::path::{Path, PathBuf};
