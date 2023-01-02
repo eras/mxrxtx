@@ -163,7 +163,7 @@ pub async fn setup_mode(
     let user_id = <&ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
     let client = Client::builder()
-        .server_name(&user_id.server_name())
+        .server_name(user_id.server_name())
         .build()
         .await?;
 

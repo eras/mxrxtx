@@ -2,8 +2,6 @@ use crate::{protocol, signaling::Signaling};
 use async_datachannel::Message;
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt, SinkExt};
-//use matrix_sdk::ruma::events::AnyToDeviceEvent;
-use anyhow;
 use matrix_sdk::{event_handler::EventHandlerHandle, Client};
 use ruma::{OwnedDeviceId, OwnedEventId, OwnedUserId};
 use ruma_client_api;
