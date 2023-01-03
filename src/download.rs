@@ -211,10 +211,13 @@ pub async fn download(
         .build()
         .await?;
     let device_id = session.device_id.clone();
+    info!("Logging in");
     client.restore_login(session).await?;
 
+    info!("Sync");
     let first_sync_response = client.sync_once(sync_settings.clone()).await?;
 
+    info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
     let room_id = get_room_id_from_uri(&uri)?;
     let room = client
