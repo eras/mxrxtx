@@ -1,4 +1,7 @@
-use crate::{config, matrix_common, matrix_signaling::MatrixSignaling, protocol, transport};
+use crate::{
+    config, matrix_common, matrix_signaling::MatrixSignalingRouter, protocol,
+    signaling::SignalingRouter, transport,
+};
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::Client;
@@ -42,13 +45,7 @@ pub enum Error {
     IoError(#[from] std::io::Error),
 }
 
-pub async fn transfer(
-    files: Vec<PathBuf>,
-    mut transport: transport::Transport,
-) -> Result<(), Error> {
-    debug!("Accepting!");
-    let mut cn = transport.accept().await?;
-    debug!("Accepted!");
+pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Result<(), Error> {
     let mut buffer: [u8; 1024] = [0; 1024];
     for file in files {
         let mut file = File::open(file)?;
@@ -64,9 +61,25 @@ pub async fn transfer(
     }
     debug!("Waiting ack");
     cn.read_exact(&mut buffer[0..2]).await?;
-    debug!("Received ack, stopping");
-    transport.stop().await?;
-    info!("Transfer stopped");
+    Ok(())
+}
+
+pub async fn accepter(
+    files: Vec<PathBuf>,
+    mut signaling_router: MatrixSignalingRouter,
+) -> Result<(), Error> {
+    let signaling = signaling_router.accept().await.unwrap();
+    let mut transport = transport::Transport::new(signaling)?;
+
+    debug!("Accepting!");
+    let cn = transport.accept().await?;
+    transfer(files, cn).await?;
+    debug!("Accepted!");
+
+    // debug!("Received ack, stopping");
+    // transport.stop().await?;
+    // info!("Transfer stopped");
+
     Ok(())
 }
 
@@ -137,15 +150,15 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 
-    let signaling = MatrixSignaling::new(client.clone(), device_id, event_id.clone(), None).await;
-    let transport = transport::Transport::new(signaling)?;
+    let signaling_router =
+        MatrixSignalingRouter::new(client.clone(), device_id, event_id.clone()).await;
 
     let task = tokio::spawn({
         let files: Vec<PathBuf> = files
             .into_iter()
             .map(|file| Path::new(file).to_path_buf())
             .collect();
-        async move { transfer(files, transport).await }
+        async move { accepter(files, signaling_router).await }
     });
 
     select! {

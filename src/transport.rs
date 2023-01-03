@@ -1,6 +1,6 @@
 use crate::signaling::Signaling;
 use anyhow;
-use async_datachannel::{DataStream, Message, PeerConnection, RtcConfig};
+use async_datachannel::{Message, PeerConnection, RtcConfig};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use futures::SinkExt;
@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{self, select};
 use uuid::Uuid;
+
+pub type DataStream = async_datachannel::DataStream;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -158,9 +160,12 @@ impl Transport {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Transport;
     use crate::test_signaling::TestSignaling;
-    use futures::{AsyncReadExt, AsyncWriteExt};
+    use futures::{
+        channel::mpsc,
+        {AsyncReadExt, AsyncWriteExt},
+    };
 
     #[tokio::test]
     async fn test_transport_signaling() {

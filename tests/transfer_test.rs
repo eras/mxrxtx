@@ -1,8 +1,8 @@
-use futures::channel::mpsc;
 use mxrxtx::download;
 use mxrxtx::offer;
 use mxrxtx::protocol;
-use mxrxtx::test_signaling::TestSignaling;
+use mxrxtx::signaling::SignalingRouter;
+use mxrxtx::test_signaling::TestSignalingRouter;
 use mxrxtx::transport::Transport;
 use std::sync::Arc;
 use std::{
@@ -48,8 +48,6 @@ fn compare_directories(path1: &Path, path2: &Path) -> Result<(), ()> {
 #[tokio::test]
 async fn transfer_file() {
     println!("start");
-    let (here_tx, here_rx) = mpsc::channel::<String>(32);
-    let (there_tx, there_rx) = mpsc::channel::<String>(32);
     let mut offer_content = protocol::OfferContent::default();
     offer_content.files.push(protocol::File {
         name: String::from("test-file.1"),
@@ -62,12 +60,13 @@ async fn transfer_file() {
     let download_tmp_dir = Arc::new(Mutex::new(Some(
         TempDir::new("mxrxtx-transfer_tests-download").unwrap(),
     )));
+    let signaling = TestSignalingRouter::new();
     let offer_task = tokio::spawn({
         let offer_content = offer_content.clone();
         let offer_tmp_dir = offer_tmp_dir.clone();
+        let mut signaling = signaling.clone();
         async move {
-            let transport =
-                Transport::new(TestSignaling::new("offer", there_rx, here_tx)).expect("weird");
+            let mut transport = Transport::new(signaling.accept().await.unwrap()).expect("weird");
             let mut files = Vec::new();
             for file in &offer_content.files {
                 let offer_tmp_dir = offer_tmp_dir.lock().await;
@@ -82,16 +81,16 @@ async fn transfer_file() {
                 }
                 files.push(file_path.to_path_buf());
             }
-            offer::transfer(files, transport)
+            offer::transfer(files, transport.accept().await.unwrap())
                 .await
                 .map_err(anyhow::Error::from)
         }
     });
     let download_task = tokio::spawn({
         let download_tmp_dir = download_tmp_dir.clone();
+        let mut signaling = signaling.clone();
         async move {
-            let transport =
-                Transport::new(TestSignaling::new("download", here_rx, there_tx)).expect("weird");
+            let transport = Transport::new(signaling.connect().await).expect("weird");
             let download_path = {
                 let download_tmp_dir = download_tmp_dir.lock().await;
                 String::from(download_tmp_dir.as_ref().unwrap().path().to_str().unwrap())
