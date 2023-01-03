@@ -42,6 +42,9 @@ pub enum Error {
 
     #[error(transparent)]
     ConsoleError(#[from] console::Error),
+
+    #[error(transparent)]
+    MatrixVerifyError(#[from] crate::matrix_verify::Error),
 }
 
 fn project_dir() -> Option<ProjectDirs> {
@@ -233,6 +236,9 @@ pub async fn setup_mode(
         "Login successful. Saved configuration to {}",
         escape(config_file)
     );
+
+    info!("Starting emoji verification. Press ^C to skip.");
+    crate::matrix_verify::verify(config).await?;
 
     Ok(())
 }

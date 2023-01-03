@@ -1,5 +1,5 @@
 #![deny(clippy::all)]
-use mxrxtx::{config, download, offer, setup, version::get_version};
+use mxrxtx::{config, download, matrix_verify, offer, setup, version::get_version};
 
 use thiserror::Error;
 
@@ -19,6 +19,9 @@ pub enum Error {
 
     #[error(transparent)]
     DownloadError(#[from] download::Error),
+
+    #[error(transparent)]
+    VerifyError(#[from] matrix_verify::Error),
 }
 
 #[tokio::main]
@@ -62,6 +65,11 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .help("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
         )
         .arg(
+            clap::Arg::new("verify")
+                .long("verify")
+                .help("Run emoji verification (start verification from another session)"),
+        )
+        .arg(
             clap::Arg::new("download")
                 .short('d')
                 .long("download")
@@ -80,7 +88,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .help("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
         )
 	.group(clap::ArgGroup::new("mode")
-               .args(&["offer", "download", "setup"])
+               .args(&["offer", "download", "setup", "verify"])
                .required(true))
         .get_matches();
 
@@ -91,6 +99,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
+    } else if args.is_present("verify") {
+        matrix_verify::verify(config).await?;
     } else if args.is_present("download") {
         let args: Vec<String> = args
             .values_of_t("download")

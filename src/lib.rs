@@ -5,6 +5,7 @@ pub mod download;
 pub mod level_event;
 pub mod matrix_common;
 pub mod matrix_signaling;
+pub mod matrix_verify;
 pub mod offer;
 pub mod protocol;
 pub mod setup;

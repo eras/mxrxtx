@@ -114,8 +114,9 @@ pub async fn init(config: &config::Config) -> Result<(Client, OwnedDeviceId, Syn
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
-        .filter(just_joined_rooms_filter())
-        .full_state(true);
+        // .filter(just_joined_rooms_filter())
+        // .full_state(true);
+;
     let client = Client::builder()
         .server_name(session.user_id.server_name())
         .sled_store(&config.state_dir, None)
