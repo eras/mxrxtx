@@ -137,7 +137,9 @@ pub async fn setup_mode(
                 console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?
             };
 
-            stdout.write_all(b"Device name (empty to use default device name \"mxrxtx\"): ")?;
+            stdout.write_all(
+                b"Device display name (empty to use default device name \"mxrxtx\"): ",
+            )?;
             stdout.flush()?;
             let device_name = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             let device_name = if device_name.is_empty() {
@@ -146,16 +148,25 @@ pub async fn setup_mode(
                 device_name
             };
 
+            stdout.write_all(b"Device id (empty to use default automatically generated id): ")?;
+            stdout.flush()?;
+            let device_id = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
+            let device_id = if device_id.is_empty() {
+                None
+            } else {
+                Some(device_id)
+            };
+
             stdout.write_all(b"Password: ")?;
             stdout.flush()?;
             let password =
                 console::read_passwd(&mut stdin, &mut stdout)?.ok_or(Error::NoInputError)?;
             stdout.write_all(b"\n")?;
 
-            Ok((mxid, password, device_name))
+            Ok((mxid, password, device_id, device_name))
         }
     });
-    let (mxid, password, device_name) = match join.await {
+    let (mxid, password, device_id, device_name) = match join.await {
         Ok(Ok(x)) => x,
         Ok(Err(x)) => return Err(x),
         Err(_) => return Err(Error::SetupError(String::from("Failed to wait setup"))),
@@ -170,9 +181,12 @@ pub async fn setup_mode(
     info!("Logging in");
     let login = client
         .login_username(user_id.localpart(), &password)
-        .device_id(&device_name)
-        .send()
-        .await?;
+        .initial_device_display_name(&device_name);
+    let login = match &device_id {
+        Some(device_id) => login.device_id(device_id),
+        None => login,
+    };
+    let login = login.send().await?;
 
     let join = tokio::task::spawn_blocking({
         move || {
