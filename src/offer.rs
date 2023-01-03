@@ -111,11 +111,11 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
-        .sled_store(config.state_dir, None)?
+        .sled_store(config.state_dir, None)
         .build()
         .await?;
     let device_id = session.device_id.clone();
-    client.restore_login(session).await?;
+    client.restore_session(session).await?;
 
     let first_sync_response = client.sync_once(sync_settings.clone()).await?;
 
@@ -139,7 +139,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     let offer = protocol::OfferContent { files: offer_files };
 
     let event_id = room
-        .send(offer, Some(&ruma::TransactionId::new()))
+        .send(offer, Some(&matrix_sdk::ruma::TransactionId::new()))
         .await?
         .event_id;
 
@@ -200,7 +200,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     room.redact(
         &event_id,
         Some("Offer expired"),
-        Some(ruma::TransactionId::new()),
+        Some(matrix_sdk::ruma::TransactionId::new()),
     )
     .await?;
     debug!("Done");

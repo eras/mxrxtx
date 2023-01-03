@@ -49,10 +49,7 @@ pub enum Error {
     DefaultHostError(String),
 
     #[error(transparent)]
-    RumaIdentifierError(#[from] ruma_identifiers::Error),
-
-    #[error(transparent)]
-    IdParseError(#[from] ruma::IdParseError),
+    IdParseError(#[from] matrix_sdk::ruma::IdParseError),
 }
 
 pub static FILENAME: &str = "mxrxtx.ini";

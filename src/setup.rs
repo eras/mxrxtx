@@ -27,13 +27,10 @@ pub enum Error {
     RumaError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
-    RumaIdentifierError(#[from] ruma_identifiers::Error),
-
-    #[error(transparent)]
     MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
 
     #[error(transparent)]
-    IdParseError(#[from] ruma::IdParseError),
+    IdParseError(#[from] matrix_sdk::ruma::IdParseError),
 
     #[error("Failure to process path: {}", .0)]
     UnsupportedPath(String),
@@ -171,7 +168,7 @@ pub async fn setup_mode(
         Ok(Err(x)) => return Err(x),
         Err(_) => return Err(Error::SetupError(String::from("Failed to wait setup"))),
     };
-    let user_id = <&ruma::UserId>::try_from(mxid.as_str())?.to_owned();
+    let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
     let client = Client::builder()
         .server_name(user_id.server_name())

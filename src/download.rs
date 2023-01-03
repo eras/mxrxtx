@@ -50,7 +50,7 @@ pub enum Error {
     MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
 
     #[error(transparent)]
-    IdParseError(#[from] ruma::IdParseError),
+    IdParseError(#[from] matrix_sdk::ruma::IdParseError),
 
     #[error(transparent)]
     OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
@@ -207,12 +207,12 @@ pub async fn download(
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
-        .sled_store(config.state_dir, None)?
+        .sled_store(config.state_dir, None)
         .build()
         .await?;
     let device_id = session.device_id.clone();
     info!("Logging in");
-    client.restore_login(session).await?;
+    client.restore_session(session).await?;
 
     info!("Sync");
     let first_sync_response = client.sync_once(sync_settings.clone()).await?;

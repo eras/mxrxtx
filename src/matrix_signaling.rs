@@ -5,9 +5,8 @@ use crate::{
 use async_datachannel::Message;
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt, SinkExt};
+use matrix_sdk::ruma::{OwnedDeviceId, OwnedEventId, OwnedUserId};
 use matrix_sdk::{event_handler::EventHandlerHandle, Client};
-use ruma::{OwnedDeviceId, OwnedEventId, OwnedUserId};
-use ruma_client_api;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tokio::{self, sync::Mutex};
@@ -147,11 +146,11 @@ impl Signaling for MatrixSignalingSingle {
     async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
         debug!("MatrixSignalingSingle::send({message:?})");
         if let Some(session_info) = self.session_info.lock().await.clone() {
-            let txn_id = ruma::TransactionId::new();
-            use ruma::events::AnyToDeviceEventContent;
-            use ruma::serde::Raw;
-            use ruma_client_api::to_device::send_event_to_device;
-            use ruma_common::to_device::DeviceIdOrAllDevices;
+            let txn_id = matrix_sdk::ruma::TransactionId::new();
+            use matrix_sdk::ruma::api::client::to_device::send_event_to_device;
+            use matrix_sdk::ruma::events::AnyToDeviceEventContent;
+            use matrix_sdk::ruma::serde::Raw;
+            use matrix_sdk::ruma::to_device::DeviceIdOrAllDevices;
             type Foo = BTreeMap<DeviceIdOrAllDevices, Raw<AnyToDeviceEventContent>>;
 
             let webrtc = protocol::ToDeviceWebRtcContent {
@@ -186,8 +185,8 @@ impl Signaling for MatrixSignalingSingle {
             let mut messages = send_event_to_device::v3::Messages::new();
             messages.insert(session_info.peer_user_id.clone(), values);
             let request = send_event_to_device::v3::Request::new_raw(
-                "fi.variaattori.mxrxtx.webrtc",
-                &txn_id,
+                "fi.variaattori.mxrxtx.webrtc".to_string(),
+                txn_id,
                 messages,
             );
 

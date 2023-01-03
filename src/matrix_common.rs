@@ -1,5 +1,5 @@
+use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
 use matrix_sdk::{room::Joined, Client};
-use ruma_client_api::{filter, sync::sync_events};
 use std::convert::TryFrom;
 use thiserror::Error;
 
@@ -7,9 +7,6 @@ use thiserror::Error;
 pub enum Error {
     #[error(transparent)]
     RumaError(#[from] matrix_sdk::Error),
-
-    #[error(transparent)]
-    RumaIdentifierError(#[from] ruma_identifiers::Error),
 
     #[error(transparent)]
     MatrixHttpError(#[from] matrix_sdk::HttpError),
@@ -24,7 +21,7 @@ pub enum Error {
     RoomNameError(String),
 
     #[error(transparent)]
-    IdParseError(#[from] ruma::IdParseError),
+    IdParseError(#[from] matrix_sdk::ruma::IdParseError),
 }
 
 enum RoomType {
@@ -48,25 +45,25 @@ impl RoomType {
     }
 }
 
-pub(crate) fn just_joined_rooms_filter<'a>() -> sync_events::v3::Filter<'a> {
+pub(crate) fn just_joined_rooms_filter() -> sync_events::v3::Filter {
     let mut empty_room_event_filter = filter::RoomEventFilter::empty();
     empty_room_event_filter.limit = Some(From::from(1u32));
-    empty_room_event_filter.rooms = Some(&[]);
+    empty_room_event_filter.rooms = Some(vec![]);
     empty_room_event_filter.lazy_load_options = filter::LazyLoadOptions::Enabled {
         include_redundant_members: false,
     };
 
     let mut no_types_filter = filter::Filter::empty();
-    no_types_filter.types = Some(&[]);
+    no_types_filter.types = Some(vec![]);
 
     let mut filter_def = filter::FilterDefinition::empty();
     filter_def.presence = no_types_filter.clone();
-    filter_def.account_data = no_types_filter.clone();
+    filter_def.account_data = no_types_filter;
     filter_def.room.include_leave = false;
     filter_def.room.account_data = empty_room_event_filter.clone();
     filter_def.room.timeline = empty_room_event_filter.clone();
     filter_def.room.ephemeral = empty_room_event_filter.clone();
-    filter_def.room.state = empty_room_event_filter.clone();
+    filter_def.room.state = empty_room_event_filter;
     sync_events::v3::Filter::FilterDefinition(filter_def)
 }
 
