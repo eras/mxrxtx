@@ -36,7 +36,7 @@ __Note: `mxrxtx` does not yet support encryption.__
 Run the initial setup. You may provide an alternative config file with
 `--config`; otherwise config file location relevant to your system is
 used.
-## `mxrxtx --offer '#room' hello.txt hello.png`
+## `mxrxtx --offer '#roomalias:example.com' hello.txt hello.png`
 Offers a file to a room `mxrxtx` is a member of and matches uniquely to
 the given name. You may also use room ids. The command outputs the
 matrix.to url for the shared files, which is shared as a single
