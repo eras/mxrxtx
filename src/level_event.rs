@@ -43,3 +43,56 @@ impl Clone for LevelEvent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LevelEvent;
+
+    #[tokio::test]
+    async fn test_simple() {
+        let l = LevelEvent::new();
+        l.issue().await;
+        l.wait().await;
+    }
+
+    #[tokio::test]
+    async fn test_spawned() {
+        let l = LevelEvent::new();
+        let spawned = tokio::spawn({
+            let l = l.clone();
+            async move {
+                l.wait().await;
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        l.issue().await;
+        spawned.await.unwrap();
+        l.wait().await;
+    }
+
+    #[tokio::test]
+    async fn test_spawned2() {
+        let l = LevelEvent::new();
+        let mut handles = vec![];
+        handles.push(tokio::spawn({
+            let l = l.clone();
+            async move {
+                l.wait().await;
+            }
+        }));
+        handles.push(tokio::spawn({
+            let l = l.clone();
+            async move {
+                l.wait().await;
+            }
+        }));
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        l.issue().await;
+        futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .map(|x| x.unwrap())
+            .for_each(drop);
+        l.wait().await;
+    }
+}
