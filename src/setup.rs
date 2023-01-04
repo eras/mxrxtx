@@ -1,4 +1,4 @@
-use crate::config;
+use crate::{config, console};
 use directories_next::ProjectDirs;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
@@ -34,6 +34,9 @@ pub enum Error {
 
     #[error("Failure to process path: {}", .0)]
     UnsupportedPath(String),
+
+    #[error(transparent)]
+    ConsoleError(#[from] console::Error),
 }
 
 fn project_dir() -> Option<ProjectDirs> {
@@ -84,36 +87,6 @@ pub fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
     get_path_logic(config_file_arg, |project_dirs| {
         project_dirs.config_dir().join("mxrxtx.ini")
     })
-}
-
-// Termion that provides read_passwd doesn't compile on Windows
-mod console {
-    use std::io::{BufRead, StdinLock, StdoutLock};
-
-    #[cfg(not(target_os = "windows"))]
-    pub fn read_passwd(
-        stdin: &mut StdinLock,
-        stdout: &mut StdoutLock,
-    ) -> Result<Option<String>, super::Error> {
-        use termion::input::TermRead;
-        stdin
-            .read_passwd(stdout)
-            .map_err(|_| super::Error::NoInputError)
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn read_passwd(
-        stdin: &mut StdinLock,
-        _stdout: &mut StdoutLock,
-    ) -> Result<Option<String>, super::Error> {
-        read_line(stdin)
-    }
-
-    pub fn read_line(stdin: &mut StdinLock) -> Result<Option<String>, super::Error> {
-        let mut buffer = String::new();
-        BufRead::read_line(stdin, &mut buffer)?;
-        Ok(Some(buffer.trim_end().to_string()))
-    }
 }
 
 pub async fn setup_mode(

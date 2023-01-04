@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 pub mod config;
+pub mod console;
 pub mod download;
 pub mod level_event;
 pub mod matrix_common;
