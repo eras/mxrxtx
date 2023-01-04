@@ -4,7 +4,6 @@ use crate::{
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
-use matrix_sdk::Client;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -18,9 +17,6 @@ use log::{debug, error, info, warn};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    ConfigError(#[from] config::Error),
-
-    #[error(transparent)]
     RumaError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
@@ -28,12 +24,6 @@ pub enum Error {
 
     #[error(transparent)]
     MatrixCommonError(#[from] matrix_common::Error),
-
-    #[error(transparent)]
-    MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
-
-    #[error(transparent)]
-    OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
 
     #[error(transparent)]
     TransportError(#[from] transport::Error),
@@ -103,21 +93,7 @@ pub async fn accepter(
 
 #[rustfmt::skip::macros(select)]
 pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
-    let session = config.get_matrix_session()?;
-
-    let filter = matrix_common::just_joined_rooms_filter();
-    let sync_settings = SyncSettings::default()
-        .filter(filter.clone())
-        .full_state(true);
-    let client = Client::builder()
-        .server_name(session.user_id.server_name())
-        .sled_store(config.state_dir, None)
-        .build()
-        .await?;
-    let device_id = session.device_id.clone();
-    client.restore_session(session).await?;
-
-    let first_sync_response = client.sync_once(sync_settings.clone()).await?;
+    let (client, device_id, first_sync_response) = matrix_common::init(config).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
@@ -173,7 +149,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     });
 
     let sync_settings = SyncSettings::default()
-        .filter(filter)
+        .filter(matrix_common::just_joined_rooms_filter())
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 

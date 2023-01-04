@@ -6,7 +6,6 @@ use crate::{
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::{OwnedEventId, OwnedRoomId};
-use matrix_sdk::Client;
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -60,6 +59,9 @@ pub enum Error {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    MatrixCommonError(#[from] matrix_common::Error),
 }
 
 #[derive(Error, Debug)]
@@ -199,23 +201,7 @@ pub async fn download(
     urls: Vec<&str>,
     output_dir: &str,
 ) -> Result<(), Error> {
-    let session = config.get_matrix_session()?;
-
-    let filter = matrix_common::just_joined_rooms_filter();
-    let sync_settings = SyncSettings::default()
-        .filter(filter.clone())
-        .full_state(true);
-    let client = Client::builder()
-        .server_name(session.user_id.server_name())
-        .sled_store(config.state_dir, None)
-        .build()
-        .await?;
-    let device_id = session.device_id.clone();
-    info!("Logging in");
-    client.restore_session(session).await?;
-
-    info!("Sync");
-    let first_sync_response = client.sync_once(sync_settings.clone()).await?;
+    let (client, device_id, first_sync_response) = matrix_common::init(config).await?;
 
     info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
@@ -258,7 +244,7 @@ pub async fn download(
         async move { transfer(output_dir, transport, offer_content).await }
     });
     let sync_settings = SyncSettings::default()
-        .filter(filter)
+        .filter(matrix_common::just_joined_rooms_filter())
         .timeout(Duration::from_millis(10000))
         .token(first_sync_response.next_batch);
 

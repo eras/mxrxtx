@@ -1,7 +1,14 @@
+use crate::config;
+use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
+use matrix_sdk::ruma::OwnedDeviceId;
+use matrix_sdk::sync::SyncResponse;
 use matrix_sdk::{room::Joined, Client};
 use std::convert::TryFrom;
 use thiserror::Error;
+
+#[allow(unused_imports)]
+use log::{debug, error, info, warn};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -22,6 +29,15 @@ pub enum Error {
 
     #[error(transparent)]
     IdParseError(#[from] matrix_sdk::ruma::IdParseError),
+
+    #[error(transparent)]
+    MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
+
+    #[error(transparent)]
+    OpenStoreError(#[from] matrix_sdk_sled::OpenStoreError),
+
+    #[error(transparent)]
+    ConfigError(#[from] config::Error),
 }
 
 enum RoomType {
@@ -92,4 +108,25 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
         }
     };
     Ok(room)
+}
+
+pub async fn init(config: config::Config) -> Result<(Client, OwnedDeviceId, SyncResponse), Error> {
+    let session = config.get_matrix_session()?;
+
+    let sync_settings = SyncSettings::default()
+        .filter(just_joined_rooms_filter())
+        .full_state(true);
+    let client = Client::builder()
+        .server_name(session.user_id.server_name())
+        .sled_store(config.state_dir, None)
+        .build()
+        .await?;
+    let device_id = session.device_id.clone();
+    info!("Logging in");
+    client.restore_session(session).await?;
+
+    info!("Sync");
+    let sync_response = client.sync_once(sync_settings).await?;
+
+    Ok((client, device_id, sync_response))
 }
