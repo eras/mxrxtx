@@ -1,0 +1,22 @@
+#!/bin/bash
+is_repo_clean() {
+    !(git status -uno --porcelain | grep -q .)
+}
+if ! is_repo_clean; then
+    echo
+    echo REPOSITORY IS NOT CLEAN, STOPPING
+    echo
+    git status -uno
+    exit 1
+fi
+version="$1"
+if [ -z "$version" ]; then
+    echo usage: scripts/tag v1.2.3
+    xeit 1
+fi
+set -e
+set -x
+scripts/update-cargo-version.sh "$(sed 's/^.//' <<< $version)"
+cargo update -p mxrxtx
+git commit -m "Bumped version to $version" Cargo.toml Cargo.lock
+git tag --force --annotate --cleanup=whitespace --edit --message '' "$version"
