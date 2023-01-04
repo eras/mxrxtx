@@ -18,5 +18,6 @@ set -e
 set -x
 scripts/update-cargo-version.sh "$(sed 's/^.//' <<< $version)"
 cargo update -p mxrxtx
-git commit -m "Bumped version to $version" Cargo.toml Cargo.lock
+# the change may have already done, so this can be skipped
+git commit -m "Bumped version to $version" Cargo.toml Cargo.lock || true
 git tag --force --annotate --cleanup=whitespace --edit --message '' "$version"
