@@ -1,6 +1,6 @@
 [package]
 name = "mxrxtx"
-version = "0.1.0"
+version = "0.1.8"
 authors = ["Erkki Seppälä <erkki.seppala@vincit.fi>"]
 edition = "2018"
 

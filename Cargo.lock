@@ -1894,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "mxrxtx"
-version = "0.1.0"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "async-channel",
