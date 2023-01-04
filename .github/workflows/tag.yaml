@@ -71,24 +71,12 @@ jobs:
         run: 'cargo build --release --locked'
       - run: strip target/release/mxrxtx
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+      - run: "gzip -9 < target/release/mxrxtx > mxrxtx.gz"
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
       - uses: actions/upload-artifact@v2
         with:
-          name: mxrxtx
-          path: |
-            target/release/mxrxtx
-            Cargo.lock
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
-      # https://github.com/actions/upload-release-asset
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          upload_url: ${{ needs.start.outputs.upload_url }}
-          asset_path: ./target/release/mxrxtx
-          asset_name: mxrxtx-${{ needs.start.outputs.git_describe }}-${{ runner.os }}.bin
-          asset_content_type: application/octet-stream
+          path: mxrxtx.gz
+          name: mxrxtx-${{ runner.os }}.gz
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
   windows:
     name: mxrxtx
@@ -122,26 +110,38 @@ jobs:
         env:
           GIT_DESCRIBE: ${{ needs.start.outputs.git_describe }}
         run: 'cargo build --release'
+      - run: 'tar.exe -a -c -f mxrxtx.zip -C target/release mxrxtx.exe'
       - uses: actions/upload-artifact@v2
         with:
-          name: mxrxtx
-          path: |
-            target/release/mxrxtx.exe
-            Cargo.lock
-      # https://github.com/actions/upload-release-asset
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          upload_url: ${{ needs.start.outputs.upload_url }}
-          asset_path: ./target/release/mxrxtx.exe
-          asset_name: mxrxtx-${{ needs.start.outputs.git_describe }}-${{ runner.os }}.exe
-          asset_content_type: application/octet-stream
-  notify_end_success:
+          path: mxrxtx.zip
+          name: mxrxtx-${{ runner.os }}.zip
+  publish:
     runs-on: ubuntu-latest
     needs: [start, unix, windows]
+    if: ${{ success() }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: false
+      - uses: actions/download-artifact@v3
+        with:
+          path: .
+      - run: 'ls -la'
+      - name: Publish release
+        uses: eloquent/github-release-action@v3
+        with:
+          prerelease: false
+          # Note the "|" character: this is a multi-line string
+          assets: |
+            - path: mxrxtx-Windows.zip
+              name: mxrxtx-${{ needs.start.outputs.git_describe }}-Windows.zip
+              label: Windows binary
+            - path: mxrxtx-Linux.gz
+              name: mxrxtx-${{ needs.start.outputs.git_describe }}-Linux.gz
+              label: Linux binary
+  notify_end_success:
+    runs-on: ubuntu-latest
+    needs: [start, publish]
     if: ${{ success() }}
     steps:
       - name: Build succeeded notification
@@ -151,16 +151,10 @@ jobs:
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
           message: "mxrxtx release ${{ needs.start.outputs.git_describe }} build complete. [Logs.](https://github.com/eras/mxrxtx/actions/runs/${{github.run_id}})"
           server: ${{ secrets.MATRIX_SERVER }}
-      - name: Publish release
-        uses: eloquent/github-release-action@v3
-        with:
-          assets: |
-            - "mxrxtx-${{ needs.start.outputs.git_describe }}-Windows.exe": "mxrxtx-Windows.exe"
-            - "mxrxtx-${{ needs.start.outputs.git_describe }}-Linux.bin": "mxrxtx-Linux.bin"
   notify_end_failed:
     runs-on: ubuntu-latest
-    needs: [start, unix, windows]
-    if: ${{ !success() }}
+    needs: [start, publish]
+    if: ${{ failure() }}
     steps:
       - name: Build failed notification
         uses: s3krit/matrix-message-action@v0.0.3

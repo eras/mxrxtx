@@ -79,7 +79,7 @@ jobs:
   notify_end_failed:
     runs-on: ubuntu-latest
     needs: [notify_start, build]
-    if: ${{ !success() }}
+    if: ${{ failure() }}
     steps:
       - name: Build failed notification
         uses: s3krit/matrix-message-action@v0.0.3
