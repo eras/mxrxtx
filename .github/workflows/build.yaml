@@ -4,6 +4,7 @@ on: [push]
 
 jobs:
   notify_start:
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Build started notification
