@@ -12,7 +12,7 @@ use thiserror::Error;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
-const DEFAULT_ICE_SERVERS: &'static [&'static str] = &["stun:stun.l.google.com:19302"];
+const DEFAULT_ICE_SERVERS: &[&str] = &["stun:stun.l.google.com:19302"];
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -174,10 +174,10 @@ pub async fn setup_mode(
             let default_state_dir = project_dir()
                 .map(|project_dir| {
                     let mut path = project_dir.cache_dir().to_path_buf();
-                    path.push(escape_paths(&device_id.to_string()));
+                    path.push(escape_paths(device_id.as_ref()));
                     path
                 })
-                .unwrap_or_else(|| Path::new(&escape_paths(&device_id.to_string())).to_path_buf());
+                .unwrap_or_else(|| Path::new(&escape_paths(device_id.as_ref())).to_path_buf());
             console::print(
                 &mut stdout,
                 &format!(
@@ -201,14 +201,14 @@ pub async fn setup_mode(
 	    ))?;
             let ice_servers = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             let ice_servers = if ice_servers.is_empty() {
-                default_ice_servers.to_string()
+                default_ice_servers
             } else if &ice_servers == "-" {
                 "".to_string()
             } else {
                 ice_servers
             };
             let ice_servers: Vec<String> = ice_servers
-                .split(",")
+                .split(',')
                 .map(|s| s.trim().to_string())
                 .collect();
 

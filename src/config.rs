@@ -81,7 +81,7 @@ impl Config {
             }
             Err(error) => return Err(Error::TomlDeError(error)),
         };
-        log::debug!("Loaded config from {}", escape(&filename));
+        log::debug!("Loaded config from {}", escape(filename));
         Ok(config)
     }
 
@@ -92,7 +92,7 @@ impl Config {
         let contents = toml::to_string(&self)?;
         let writer = atomicwrites::AtomicFile::new(filename, atomicwrites::AllowOverwrite);
         writer.write(|f| f.write_all(contents.as_bytes()))?;
-        log::debug!("Wrote config to {}", escape(&filename));
+        log::debug!("Wrote config to {}", escape(filename));
         Ok(())
     }
 
