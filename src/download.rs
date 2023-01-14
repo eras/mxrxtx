@@ -2,7 +2,7 @@ use crate::{
     config, matrix_common,
     matrix_signaling::{MatrixSignaling, SessionInfo},
     protocol, transport,
-    utils::escape,
+    utils::{escape, escape_paths},
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -170,7 +170,7 @@ pub async fn transfer(
                 let write_bytes = cmp::min(cur_bytes_remaining, n);
                 if cur_file.is_none() {
                     let mut path = PathBuf::from(&output_dir);
-                    path.push(&files[file_idx].name);
+                    path.push(escape_paths(&files[file_idx].name));
                     info!("Downloading {:?}", escape(&path.to_string_lossy()));
                     let file = File::create(&path)?;
                     cur_file = Some(file);
