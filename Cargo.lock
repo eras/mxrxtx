@@ -111,7 +111,7 @@ dependencies = [
 [[package]]
 name = "async-datachannel"
 version = "0.4.0"
-source = "git+https://github.com/eras/async-datachannel?rev=1083bb6b72d7ebb9c9ca3aa881dd9d742f25c3b0#1083bb6b72d7ebb9c9ca3aa881dd9d742f25c3b0"
+source = "git+https://github.com/eras/async-datachannel?rev=6770399337f0701853495cd5c9589ffab4a3306c#6770399337f0701853495cd5c9589ffab4a3306c"
 dependencies = [
  "anyhow",
  "datachannel",
