@@ -1,4 +1,7 @@
-use crate::{config, console, utils::escape};
+use crate::{
+    config, console,
+    utils::{escape, escape_paths},
+};
 use directories_next::ProjectDirs;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
@@ -157,6 +160,7 @@ pub async fn setup_mode(
         None => login,
     };
     let login = login.send().await?;
+    let device_id = login.device_id.clone();
 
     let join = tokio::task::spawn_blocking({
         move || {
@@ -166,8 +170,12 @@ pub async fn setup_mode(
             let mut stdin = stdin.lock();
 
             let default_state_dir = project_dir()
-                .map(|project_dir| project_dir.cache_dir().to_path_buf())
-                .unwrap_or_else(|| Path::new(".").to_path_buf());
+                .map(|project_dir| {
+                    let mut path = project_dir.cache_dir().to_path_buf();
+                    path.push(escape_paths(&device_id.to_string()));
+                    path
+                })
+                .unwrap_or_else(|| Path::new(&escape_paths(&device_id.to_string())).to_path_buf());
             stdout.write_all(
                 format!(
                     "State directory (empty to use default state directory \"{}\"): ",
@@ -177,6 +185,9 @@ pub async fn setup_mode(
             )?;
             stdout.flush()?;
             let state_dir = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
+            if let Some(parent) = Path::new(&state_dir).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
             let state_dir = if state_dir.is_empty() {
                 default_state_dir
             } else {
