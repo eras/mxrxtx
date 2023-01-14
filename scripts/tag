@@ -12,7 +12,7 @@ fi
 version="$1"
 if [ -z "$version" ]; then
     echo usage: scripts/tag v1.2.3
-    xeit 1
+    exit 1
 fi
 set -e
 set -x
