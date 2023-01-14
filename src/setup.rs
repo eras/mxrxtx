@@ -1,4 +1,4 @@
-use crate::{config, console};
+use crate::{config, console, utils::escape};
 use directories_next::ProjectDirs;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
@@ -171,7 +171,7 @@ pub async fn setup_mode(
             stdout.write_all(
                 format!(
                     "State directory (empty to use default state directory \"{}\"): ",
-                    default_state_dir.to_string_lossy()
+                    escape(&default_state_dir.to_string_lossy())
                 )
                 .as_bytes(),
             )?;
@@ -199,7 +199,10 @@ pub async fn setup_mode(
     config.state_dir = state_dir;
     config.save(config_file)?;
 
-    info!("Login successful. Saved configuration to {}", config_file);
+    info!(
+        "Login successful. Saved configuration to {}",
+        escape(config_file)
+    );
 
     Ok(())
 }

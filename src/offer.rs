@@ -1,6 +1,6 @@
 use crate::{
     config, level_event::LevelEvent, matrix_common, matrix_signaling::MatrixSignalingRouter,
-    protocol, signaling::SignalingRouter, transport,
+    protocol, signaling::SignalingRouter, transport, utils::escape,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -137,7 +137,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
 
     println!(
         "Offer for {} started; press ctrl-c to redact",
-        uri.matrix_uri_string()
+        escape(&uri.matrix_uri_string())
     );
     let exit_signal = LevelEvent::new();
     tokio::spawn({

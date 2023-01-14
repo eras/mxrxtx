@@ -1,3 +1,4 @@
+use crate::utils::escape;
 use serde_derive::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt;
@@ -79,7 +80,7 @@ impl Config {
             }
             Err(error) => return Err(Error::TomlDeError(error)),
         };
-        log::debug!("Loaded config from {}", filename);
+        log::debug!("Loaded config from {}", escape(&filename));
         Ok(config)
     }
 
@@ -90,7 +91,7 @@ impl Config {
         let contents = toml::to_string(&self)?;
         let writer = atomicwrites::AtomicFile::new(filename, atomicwrites::AllowOverwrite);
         writer.write(|f| f.write_all(contents.as_bytes()))?;
-        log::debug!("Wrote config to {}", filename);
+        log::debug!("Wrote config to {}", escape(&filename));
         Ok(())
     }
 
