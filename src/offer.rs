@@ -37,6 +37,7 @@ pub enum Error {
 
 pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Result<(), Error> {
     let mut buffer: [u8; 1024] = [0; 1024];
+    let mut total_bytes = 0;
     for file in files {
         let mut file = File::open(file)?;
         let mut eof = false;
@@ -44,12 +45,13 @@ pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Res
             let n = file.read(&mut buffer)?;
             if n > 0 {
                 cn.write_all(&buffer[0..n]).await?;
+                total_bytes += n;
             } else {
                 eof = true;
             }
         }
     }
-    debug!("Waiting ack");
+    debug!("Wrote {total_bytes}, waiting ack");
     cn.read_exact(&mut buffer[0..2]).await?;
     Ok(())
 }

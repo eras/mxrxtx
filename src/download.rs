@@ -189,7 +189,7 @@ pub async fn transfer(
     }
     debug!("Exiting loop");
     cn.write_all(b"ok").await?;
-    debug!("Stopping after receiving {total_bytes} bytes");
+    info!("Received {total_bytes} bytes");
     transport.stop().await?;
     info!("Transport stopped");
     Ok(())
