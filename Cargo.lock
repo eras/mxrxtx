@@ -1581,7 +1581,7 @@ checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 [[package]]
 name = "matrix-sdk"
 version = "0.6.2"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "anymap2",
  "async-once-cell",
@@ -1596,13 +1596,13 @@ dependencies = [
  "futures-util",
  "http",
  "indexmap",
- "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
- "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
+ "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "matrix-sdk-indexeddb",
- "matrix-sdk-sled 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-sled 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "mime",
  "reqwest",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -1641,7 +1641,7 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-base"
 version = "0.6.1"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -1650,11 +1650,11 @@ dependencies = [
  "futures-core",
  "futures-signals",
  "futures-util",
- "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "matrix-sdk-crypto",
- "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "once_cell",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
  "thiserror",
@@ -1681,13 +1681,13 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-common"
 version = "0.6.0"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "async-lock",
  "futures-core",
  "futures-util",
  "instant",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
  "tokio",
@@ -1698,12 +1698,12 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-crypto"
 version = "0.6.0"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "aes",
  "async-trait",
  "atomic",
- "base64 0.13.1",
+ "base64 0.20.0",
  "byteorder",
  "cfg-if",
  "ctr",
@@ -1713,10 +1713,10 @@ dependencies = [
  "futures-signals",
  "futures-util",
  "hmac",
- "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "pbkdf2",
  "rand 0.8.5",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
  "sha2 0.10.6",
@@ -1730,21 +1730,21 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-indexeddb"
 version = "0.2.0"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.13.1",
+ "base64 0.20.0",
  "dashmap",
  "derive_builder",
  "getrandom 0.2.8",
  "gloo-utils",
  "indexed_db_futures",
  "js-sys",
- "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "matrix-sdk-crypto",
- "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
  "thiserror",
@@ -1781,7 +1781,7 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-sled"
 version = "0.2.0"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -1790,11 +1790,11 @@ dependencies = [
  "fs_extra",
  "futures-core",
  "futures-util",
- "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
- "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
+ "matrix-sdk-base 0.6.1 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
+ "matrix-sdk-common 0.6.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
  "matrix-sdk-crypto",
- "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e)",
- "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "matrix-sdk-store-encryption 0.2.0 (git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95)",
+ "ruma 0.7.4 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
  "sled",
@@ -1825,7 +1825,7 @@ dependencies = [
 [[package]]
 name = "matrix-sdk-store-encryption"
 version = "0.2.0"
-source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=46fe998a33b4c8fb0f9623aafa439d765446d02e#46fe998a33b4c8fb0f9623aafa439d765446d02e"
+source = "git+https://github.com/matrix-org/matrix-rust-sdk?rev=386cbce34412e50b40d65fb7f6473fcbc3128c95#386cbce34412e50b40d65fb7f6473fcbc3128c95"
 dependencies = [
  "blake3",
  "chacha20poly1305",
@@ -2486,13 +2486,13 @@ dependencies = [
 [[package]]
 name = "ruma"
 version = "0.7.4"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "assign",
  "js_int",
  "js_option",
- "ruma-client-api 0.15.3 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
- "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma-client-api 0.15.3 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
+ "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "ruma-federation-api",
 ]
 
@@ -2516,7 +2516,7 @@ dependencies = [
 [[package]]
 name = "ruma-client-api"
 version = "0.15.3"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "assign",
  "bytes",
@@ -2524,7 +2524,7 @@ dependencies = [
  "js_int",
  "js_option",
  "maplit",
- "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -2559,7 +2559,7 @@ dependencies = [
 [[package]]
 name = "ruma-common"
 version = "0.10.5"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "base64 0.20.0",
  "bytes",
@@ -2574,8 +2574,8 @@ dependencies = [
  "percent-encoding",
  "rand 0.8.5",
  "regex",
- "ruma-identifiers-validation 0.9.0 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
- "ruma-macros 0.10.5 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma-identifiers-validation 0.9.0 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
+ "ruma-macros 0.10.5 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_html_form",
  "serde_json",
@@ -2589,10 +2589,10 @@ dependencies = [
 [[package]]
 name = "ruma-federation-api"
 version = "0.6.0"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "js_int",
- "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma-common 0.10.5 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "serde_json",
 ]
@@ -2610,7 +2610,7 @@ dependencies = [
 [[package]]
 name = "ruma-identifiers-validation"
 version = "0.9.0"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "js_int",
  "thiserror",
@@ -2635,13 +2635,13 @@ dependencies = [
 [[package]]
 name = "ruma-macros"
 version = "0.10.5"
-source = "git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8#022a0c0475f7ffeccd5a26c15b9465edf06ba8b8"
+source = "git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d#3a722965f52f8f283623db6a5d96b94599e50a2d"
 dependencies = [
  "once_cell",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "ruma-identifiers-validation 0.9.0 (git+https://github.com/ruma/ruma?rev=022a0c0475f7ffeccd5a26c15b9465edf06ba8b8)",
+ "ruma-identifiers-validation 0.9.0 (git+https://github.com/ruma/ruma?rev=3a722965f52f8f283623db6a5d96b94599e50a2d)",
  "serde",
  "syn",
  "toml",
@@ -3027,9 +3027,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.23.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
+checksum = "1d9f76183f91ecfb55e1d7d5602bd1d979e38a3a522fe900241cf195624d67ae"
 dependencies = [
  "autocfg",
  "bytes",

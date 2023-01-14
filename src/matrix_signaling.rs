@@ -185,7 +185,7 @@ impl Signaling for MatrixSignalingSingle {
             let mut messages = send_event_to_device::v3::Messages::new();
             messages.insert(session_info.peer_user_id.clone(), values);
             let request = send_event_to_device::v3::Request::new_raw(
-                "fi.variaattori.mxrxtx.webrtc".to_string(),
+                "fi.variaattori.mxrxtx.webrtc".into(),
                 txn_id,
                 messages,
             );
