@@ -20,7 +20,7 @@ Compared to using the normal file upload/download functionality this
 approach doesn't have file size limitations (as configured by the
 homeserver admin) and naturally it doesn't consume almost any server
 resources nor will the data remain around in the homeserver once it
-has been removed.
+has been removed (but metadata might).
 
 On the other hand, to transfer the files the source must remain
 connected to the Internet for the complete duration of the transfer
