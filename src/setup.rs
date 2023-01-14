@@ -12,6 +12,8 @@ use thiserror::Error;
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
+const DEFAULT_ICE_SERVERS: &'static [&'static str] = &["stun:stun.l.google.com:19302"];
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -193,10 +195,27 @@ pub async fn setup_mode(
                 Path::new(&state_dir).to_path_buf()
             };
 
-            Ok(state_dir)
+            let default_ice_servers = DEFAULT_ICE_SERVERS.join(", ");
+            console::print(&mut stdout, &format!(
+                    "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers): "
+	    ))?;
+            let ice_servers = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
+            let ice_servers = if ice_servers.is_empty() {
+                default_ice_servers.to_string()
+            } else if &ice_servers == "-" {
+                "".to_string()
+            } else {
+                ice_servers
+            };
+            let ice_servers: Vec<String> = ice_servers
+                .split(",")
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            Ok((state_dir, ice_servers))
         }
     });
-    let state_dir = match join.await {
+    let (state_dir, ice_servers) = match join.await {
         Ok(Ok(x)) => x,
         Ok(Err(x)) => return Err(x),
         Err(_) => return Err(Error::SetupError(String::from("Failed to wait setup"))),
@@ -207,6 +226,7 @@ pub async fn setup_mode(
     config.refresh_token = login.refresh_token;
     config.device_id = login.device_id.to_string();
     config.state_dir = state_dir;
+    config.ice_servers = ice_servers;
     config.save(config_file)?;
 
     info!(

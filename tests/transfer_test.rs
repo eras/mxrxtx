@@ -66,7 +66,8 @@ async fn transfer_file() {
         let offer_tmp_dir = offer_tmp_dir.clone();
         let mut signaling = signaling.clone();
         async move {
-            let mut transport = Transport::new(signaling.accept().await.unwrap()).expect("weird");
+            let mut transport =
+                Transport::new(signaling.accept().await.unwrap(), vec![]).expect("weird");
             let mut files = Vec::new();
             for file in &offer_content.files {
                 let offer_tmp_dir = offer_tmp_dir.lock().await;
@@ -90,7 +91,7 @@ async fn transfer_file() {
         let download_tmp_dir = download_tmp_dir.clone();
         let mut signaling = signaling.clone();
         async move {
-            let transport = Transport::new(signaling.connect().await).expect("weird");
+            let transport = Transport::new(signaling.connect().await, vec![]).expect("weird");
             let download_path = {
                 let download_tmp_dir = download_tmp_dir.lock().await;
                 String::from(download_tmp_dir.as_ref().unwrap().path().to_str().unwrap())

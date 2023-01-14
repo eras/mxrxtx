@@ -202,7 +202,7 @@ pub async fn download(
     urls: Vec<&str>,
     output_dir: &str,
 ) -> Result<(), Error> {
-    let (client, device_id, first_sync_response) = matrix_common::init(config).await?;
+    let (client, device_id, first_sync_response) = matrix_common::init(&config).await?;
 
     info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
@@ -238,7 +238,15 @@ pub async fn download(
         }),
     )
     .await;
-    let transport = transport::Transport::new(signaling)?;
+    let transport = transport::Transport::new(
+        signaling,
+        config
+            .ice_servers
+            .clone()
+            .iter()
+            .map(|x| x.as_str())
+            .collect(),
+    )?;
 
     let download_task = tokio::spawn({
         let output_dir = String::from(output_dir);

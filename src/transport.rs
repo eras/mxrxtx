@@ -90,8 +90,10 @@ async fn handle_signaling(
 }
 
 impl Transport {
-    pub fn new(signaling: impl Signaling + Send + Sync + Sync + 'static) -> Result<Self, Error> {
-        let ice_servers = vec!["stun:stun.l.google.com:19302"];
+    pub fn new(
+        signaling: impl Signaling + Send + Sync + Sync + 'static,
+        ice_servers: Vec<&str>,
+    ) -> Result<Self, Error> {
         let rtc_config = RtcConfig::new(&ice_servers);
         let (tx_sig_outbound, rx_sig_outbound) = mpsc::channel(32);
         let (tx_sig_inbound, rx_sig_inbound) = mpsc::channel(32);
@@ -173,9 +175,9 @@ mod tests {
         let (here_tx, here_rx) = mpsc::channel::<String>(32);
         let (there_tx, there_rx) = mpsc::channel::<String>(32);
         let mut here =
-            Transport::new(TestSignaling::new("here", here_rx, there_tx)).expect("weird");
+            Transport::new(TestSignaling::new("here", here_rx, there_tx), vec![]).expect("weird");
         let mut there =
-            Transport::new(TestSignaling::new("there", there_rx, here_tx)).expect("weird");
+            Transport::new(TestSignaling::new("there", there_rx, here_tx), vec![]).expect("weird");
         let there_task = tokio::spawn({
             async move {
                 println!("there accepting connection");

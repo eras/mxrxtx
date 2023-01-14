@@ -110,7 +110,7 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
     Ok(room)
 }
 
-pub async fn init(config: config::Config) -> Result<(Client, OwnedDeviceId, SyncResponse), Error> {
+pub async fn init(config: &config::Config) -> Result<(Client, OwnedDeviceId, SyncResponse), Error> {
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
@@ -118,7 +118,7 @@ pub async fn init(config: config::Config) -> Result<(Client, OwnedDeviceId, Sync
         .full_state(true);
     let client = Client::builder()
         .server_name(session.user_id.server_name())
-        .sled_store(config.state_dir, None)
+        .sled_store(&config.state_dir, None)
         .build()
         .await?;
     let device_id = session.device_id.clone();

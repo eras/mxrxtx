@@ -15,6 +15,7 @@ pub struct Config {
     pub device_id: String,
     pub refresh_token: Option<String>,
     pub state_dir: PathBuf,
+    pub ice_servers: Vec<String>,
 }
 
 #[derive(Error, Debug)]
