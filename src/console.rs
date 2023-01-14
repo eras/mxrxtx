@@ -1,4 +1,4 @@
-use std::io::{BufRead, StdinLock, StdoutLock};
+use std::io::{BufRead, StdinLock, StdoutLock, Write};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -31,4 +31,10 @@ pub fn read_line(stdin: &mut StdinLock) -> Result<Option<String>, Error> {
     let mut buffer = String::new();
     BufRead::read_line(stdin, &mut buffer)?;
     Ok(Some(buffer.trim_end().to_string()))
+}
+
+pub fn print(stdout: &mut StdoutLock, message: &str) -> Result<(), Error> {
+    stdout.write_all(message.to_string().as_bytes())?;
+    stdout.flush()?;
+    Ok(())
 }

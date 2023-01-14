@@ -5,7 +5,7 @@ use crate::{
 use directories_next::ProjectDirs;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -105,15 +105,14 @@ pub async fn setup_mode(
             let mut stdin = stdin.lock();
 
             let mxid = {
-                stdout.write_all(b"Matrix id (e.g. @user:example.org): ")?;
-                stdout.flush()?;
+                console::print(&mut stdout, "Matrix id (e.g. @user:example.org): ")?;
                 console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?
             };
 
-            stdout.write_all(
-                b"Device display name (empty to use default device name \"mxrxtx\"): ",
+            console::print(
+                &mut stdout,
+                "Device display name (empty to use default device name \"mxrxtx\"): ",
             )?;
-            stdout.flush()?;
             let device_name = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             let device_name = if device_name.is_empty() {
                 "mxrxtx".to_string()
@@ -121,8 +120,10 @@ pub async fn setup_mode(
                 device_name
             };
 
-            stdout.write_all(b"Device id (empty to use default automatically generated id): ")?;
-            stdout.flush()?;
+            console::print(
+                &mut stdout,
+                "Device id (empty to use default automatically generated id): ",
+            )?;
             let device_id = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             let device_id = if device_id.is_empty() {
                 None
@@ -130,11 +131,10 @@ pub async fn setup_mode(
                 Some(device_id)
             };
 
-            stdout.write_all(b"Password: ")?;
-            stdout.flush()?;
+            console::print(&mut stdout, "Password: ")?;
             let password =
                 console::read_passwd(&mut stdin, &mut stdout)?.ok_or(Error::NoInputError)?;
-            stdout.write_all(b"\n")?;
+            console::print(&mut stdout, "\n")?;
 
             Ok((mxid, password, device_id, device_name))
         }
@@ -176,14 +176,13 @@ pub async fn setup_mode(
                     path
                 })
                 .unwrap_or_else(|| Path::new(&escape_paths(&device_id.to_string())).to_path_buf());
-            stdout.write_all(
-                format!(
+            console::print(
+                &mut stdout,
+                &format!(
                     "State directory (empty to use default state directory \"{}\"): ",
                     escape(&default_state_dir.to_string_lossy())
-                )
-                .as_bytes(),
+                ),
             )?;
-            stdout.flush()?;
             let state_dir = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
             if let Some(parent) = Path::new(&state_dir).parent() {
                 std::fs::create_dir_all(parent)?;
