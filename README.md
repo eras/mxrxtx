@@ -3,7 +3,8 @@ This tool is licensed under the [MIT license](LICENSE.MIT).
 Copyright: Erkki Seppälä <erkki.seppala@vincit.fi> 2022-2023
 
 You can contact me also [via
-Matrix](https://matrix.to/#/@flux:matrix.org).
+Matrix](https://matrix.to/#/@flux:matrix.org) or at
+[#mxrxtx:matrix.org](https://matrix.to/#/#mxrxtx:matrix.org).
 
 [![Build](https://github.com/eras/mxrxtx/actions/workflows/build.yaml/badge.svg)](https://github.com/eras/mxrxtx/actions/workflows/build.yaml)
 
