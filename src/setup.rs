@@ -3,6 +3,7 @@ use crate::{
     utils::{escape, escape_paths},
 };
 use directories_next::ProjectDirs;
+use matrix_sdk::ruma::OwnedDeviceId;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -99,51 +100,35 @@ pub fn get_config_file(config_file_arg: Option<&str>) -> Result<String, Error> {
     })
 }
 
-pub async fn setup_mode(
-    _args: clap::ArgMatches,
-    mut config: config::Config,
-    config_file: &str,
-) -> Result<(), Error> {
-    let mxid = console::prompt("Matrix id (e.g. @user:example.org): ").await?;
-
+async fn prompt_device_name() -> Result<String, Error> {
     let device_name =
         console::prompt("Device display name (empty to use default device name \"mxrxtx\"):")
             .await?;
-    let device_name = if device_name.is_empty() {
-        "mxrxtx".to_string()
+    if device_name.is_empty() {
+        Ok("mxrxtx".to_string())
     } else {
-        device_name
-    };
+        Ok(device_name)
+    }
+}
 
+async fn prompt_device_id() -> Result<Option<String>, Error> {
     let device_id =
         console::prompt("Device id (empty to use default automatically generated id):").await?;
-    let device_id = if device_id.is_empty() {
-        None
+    if device_id.is_empty() {
+        Ok(None)
     } else {
-        Some(device_id)
-    };
+        Ok(Some(device_id))
+    }
+}
 
+async fn prompt_password() -> Result<String, Error> {
     console::print("Password: ").await?;
     let password = console::read_passwd().await?;
     console::print("\n").await?;
-    let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
+    Ok(password)
+}
 
-    let client = Client::builder()
-        .server_name(user_id.server_name())
-        .build()
-        .await?;
-
-    info!("Logging in");
-    let login = client
-        .login_username(user_id.localpart(), &password)
-        .initial_device_display_name(&device_name);
-    let login = match &device_id {
-        Some(device_id) => login.device_id(device_id),
-        None => login,
-    };
-    let login = login.send().await?;
-    let device_id = login.device_id.clone();
-
+async fn prompt_state_dir(device_id: &OwnedDeviceId) -> Result<PathBuf, Error> {
     let default_state_dir = project_dir()
         .map(|project_dir| {
             let mut path = project_dir.cache_dir().to_path_buf();
@@ -164,7 +149,10 @@ pub async fn setup_mode(
     } else {
         Path::new(&state_dir).to_path_buf()
     };
+    Ok(state_dir)
+}
 
+async fn prompt_ice_servers() -> Result<Vec<String>, Error> {
     let default_ice_servers = DEFAULT_ICE_SERVERS.join(", ");
     let ice_servers = console::prompt(&format!(
                     "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers):"
@@ -180,6 +168,64 @@ pub async fn setup_mode(
         .split(',')
         .map(|s| s.trim().to_string())
         .collect();
+    Ok(ice_servers)
+}
+
+async fn prompt_log_room(config: &config::Config) -> Result<Option<String>, Error> {
+    let log_room = console::prompt(
+        "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none?",
+    )
+    .await?;
+    if !log_room.is_empty() {
+        // create a new client with loaded data and state
+        let session = config.get_matrix_session()?;
+        let user_id = <&matrix_sdk::ruma::UserId>::try_from(config.user_id.as_str())?.to_owned();
+        let client = Client::builder()
+            .server_name(user_id.server_name())
+            .build()
+            .await?;
+        client.restore_session(session).await?;
+
+        let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
+
+        Ok(Some(log_room.room_id().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn setup_mode(
+    _args: clap::ArgMatches,
+    mut config: config::Config,
+    config_file: &str,
+) -> Result<(), Error> {
+    let mxid = console::prompt("Matrix id (e.g. @user:example.org): ").await?;
+
+    let device_name = prompt_device_name().await?;
+    let device_id = prompt_device_id().await?;
+    let password = prompt_password().await?;
+
+    let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
+
+    let client = Client::builder()
+        .server_name(user_id.server_name())
+        .build()
+        .await?;
+
+    info!("Logging in");
+    let login = client
+        .login_username(user_id.localpart(), &password)
+        .initial_device_display_name(&device_name);
+    let login = match &device_id {
+        Some(device_id) => login.device_id(device_id),
+        None => login,
+    };
+    let login = login.send().await?;
+    let device_id = login.device_id.clone();
+
+    let state_dir = prompt_state_dir(&device_id).await?;
+
+    let ice_servers = prompt_ice_servers().await?;
 
     config.user_id = user_id.to_string();
     config.access_token = login.access_token;
@@ -194,22 +240,9 @@ pub async fn setup_mode(
         escape(config_file)
     );
 
-    let log_room = console::prompt(
-        "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none?",
-    )
-    .await?;
     drop(client);
-    if !log_room.is_empty() {
-        // create a new client with loaded data and state
-        let session = config.get_matrix_session()?;
-        let client = Client::builder()
-            .server_name(user_id.server_name())
-            .build()
-            .await?;
-        client.restore_session(session).await?;
-
-        let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
-        config.log_room = Some(log_room.room_id().to_string());
+    if let Some(log_room) = prompt_log_room(&config).await? {
+        config.log_room = Some(log_room);
         config.save(config_file)?;
         info!("Saved configuration");
     }
