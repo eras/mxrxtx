@@ -218,7 +218,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
 
     room.redact(
         &event_id,
-        Some("Offer expired"),
+        None,
         Some(matrix_sdk::ruma::TransactionId::new()),
     )
     .await?;
