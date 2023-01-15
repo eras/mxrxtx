@@ -1,6 +1,6 @@
 // Based on the emoji_verification example from the matrix-sdk
 
-use crate::{config, matrix_common};
+use crate::{config, matrix_common, matrix_log};
 use std::io::Write;
 use thiserror::Error;
 use tokio::select;
@@ -36,6 +36,9 @@ pub enum Error {
 
     #[error(transparent)]
     MatrixCommonError(#[from] matrix_common::Error),
+
+    #[error(transparent)]
+    MatrixLogError(#[from] matrix_log::Error),
 }
 
 async fn wait_for_confirmation(sas: SasVerification, emoji: [Emoji; 7]) {
@@ -217,7 +220,8 @@ pub async fn add_event_handlers(
 
 #[rustfmt::skip::macros(select)]
 pub async fn verify(config: config::Config) -> Result<(), Error> {
-    let (client, _device_id, first_sync_response) = matrix_common::init(&config).await?;
+    let (client, _device_id, first_sync_response, matrix_log) =
+        matrix_common::init(&config).await?;
 
     let (result_send, mut result_receive) = mpsc::unbounded_channel();
     add_event_handlers(client.clone(), result_send).await?;
@@ -228,7 +232,7 @@ pub async fn verify(config: config::Config) -> Result<(), Error> {
 	result = result_receive.recv() => {
 	    if let Some(result) = result {
 		if result? {
-		    info!("Verification completed");
+		    matrix_log.log("Verification completed").await?;
 		} else {
 		    info!("Verification failed");
 		}

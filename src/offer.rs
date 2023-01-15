@@ -1,6 +1,7 @@
 use crate::{
-    config, level_event::LevelEvent, matrix_common, matrix_signaling::MatrixSignalingRouter,
-    protocol, signaling::SignalingRouter, transport, utils::escape,
+    config, level_event::LevelEvent, matrix_common, matrix_log,
+    matrix_signaling::MatrixSignalingRouter, protocol, signaling::SignalingRouter, transport,
+    utils::escape,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
@@ -33,6 +34,9 @@ pub enum Error {
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    MatrixLogError(#[from] matrix_log::Error),
 }
 
 pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Result<(), Error> {
@@ -62,11 +66,18 @@ pub fn accepter_recurse(
     files: Vec<PathBuf>,
     signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
+    matrix_log: matrix_log::MatrixLog,
 ) -> BoxFuture<'static, ()> {
     Box::pin(async move {
-        accepter(exit_signal, files, signaling_router, ice_servers.clone())
-            .await
-            .unwrap()
+        accepter(
+            exit_signal,
+            files,
+            signaling_router,
+            ice_servers.clone(),
+            matrix_log,
+        )
+        .await
+        .unwrap()
     }) as BoxFuture<()>
 }
 
@@ -75,6 +86,7 @@ pub async fn accepter(
     files: Vec<PathBuf>,
     mut signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
+    matrix_log: matrix_log::MatrixLog,
 ) -> Result<(), Error> {
     info!("Waiting for new signaling peer");
     let signaling = signaling_router.accept().await.unwrap();
@@ -82,14 +94,27 @@ pub async fn accepter(
         let ice_servers = ice_servers.clone();
         let exit_signal = exit_signal.clone();
         let files = files.clone();
-        async move { accepter_recurse(exit_signal, files, signaling_router, ice_servers).await }
+        let matrix_log = matrix_log.clone();
+        async move {
+            accepter_recurse(
+                exit_signal,
+                files,
+                signaling_router,
+                ice_servers,
+                matrix_log,
+            )
+            .await
+        }
     });
     let mut transport =
         transport::Transport::new(signaling, ice_servers.iter().map(|x| x.as_str()).collect())?;
-    debug!("Accepting!");
+    matrix_log.log("Accepting a connection").await?;
     let cn = transport.accept().await?;
+    matrix_log
+        .log("Accepted a connection, transferring file")
+        .await?;
     transfer(files, cn).await?;
-    debug!("Accepted!");
+    matrix_log.log("Transferring complete").await?;
     // debug!("Received ack, stopping");
     // transport.stop().await?;
     // info!("Transfer stopped");
@@ -99,7 +124,7 @@ pub async fn accepter(
 
 #[rustfmt::skip::macros(select)]
 pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
-    let (client, device_id, first_sync_response) = matrix_common::init(&config).await?;
+    let (client, device_id, first_sync_response, matrix_log) = matrix_common::init(&config).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
@@ -139,10 +164,6 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         None,
     )?;
 
-    println!(
-        "Offer for {} started; press ctrl-c to redact",
-        escape(&uri.matrix_uri_string())
-    );
     let exit_signal = LevelEvent::new();
     tokio::spawn({
         let exit_signal = exit_signal.clone();
@@ -153,6 +174,13 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
             exit_signal.issue().await;
         }
     });
+
+    matrix_log
+        .log(&format!(
+            "Offer for {} started",
+            escape(&uri.matrix_uri_string())
+        ))
+        .await?;
 
     let sync_settings = SyncSettings::default()
         .filter(matrix_common::just_joined_rooms_filter())
@@ -168,7 +196,17 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
             .map(|file| Path::new(file).to_path_buf())
             .collect();
         let exit_signal = exit_signal.clone();
-        async move { accepter(exit_signal, files, signaling_router, config.ice_servers).await }
+        let matrix_log = matrix_log.clone();
+        async move {
+            accepter(
+                exit_signal,
+                files,
+                signaling_router,
+                config.ice_servers,
+                matrix_log,
+            )
+            .await
+        }
     });
 
     select! {
@@ -178,14 +216,13 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
 	}
     }
 
-    info!("Redacting offer");
     room.redact(
         &event_id,
         Some("Offer expired"),
         Some(matrix_sdk::ruma::TransactionId::new()),
     )
     .await?;
-    debug!("Done");
+    matrix_log.log("Offer stopped (redacted)").await?;
 
     Ok(())
 }

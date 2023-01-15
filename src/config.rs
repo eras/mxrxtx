@@ -16,6 +16,7 @@ pub struct Config {
     pub refresh_token: Option<String>,
     pub state_dir: PathBuf,
     pub ice_servers: Vec<String>,
+    pub log_room: Option<String>, // use this room for logging
 }
 
 #[derive(Error, Debug)]

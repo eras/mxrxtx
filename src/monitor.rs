@@ -1,5 +1,7 @@
 use crate::{
-    config, download, matrix_common,
+    config, download,
+    level_event::LevelEvent,
+    matrix_common, matrix_log,
     matrix_signaling::{MatrixSignaling, SessionInfo},
     protocol, transport,
 };
@@ -31,6 +33,9 @@ pub enum Error {
 
     #[error(transparent)]
     TransportError(#[from] transport::Error),
+
+    #[error(transparent)]
+    MatrixLogError(#[from] matrix_log::Error),
 }
 
 struct Monitor {
@@ -40,6 +45,7 @@ struct Monitor {
     output_dir: String,
     rooms: Option<Vec<Joined>>,
     client: Client,
+    matrix_log: Arc<Mutex<matrix_log::MatrixLog>>,
 }
 
 impl Monitor {
@@ -49,11 +55,13 @@ impl Monitor {
         config: config::Config,
         output_dir: String,
         rooms: Option<Vec<Joined>>,
+        matrix_log: matrix_log::MatrixLog,
     ) -> (
         Arc<Mutex<Monitor>>,
         mpsc::UnboundedReceiver<Result<(), Error>>,
     ) {
         let (results_send, results_receive) = mpsc::unbounded_channel();
+        let matrix_log = Arc::new(Mutex::new(matrix_log));
         let monitor = Arc::new(Mutex::new(Monitor {
             device_id,
             config,
@@ -61,6 +69,7 @@ impl Monitor {
             output_dir,
             rooms,
             client: client.clone(),
+            matrix_log,
         }));
         // TODO: remove added event handlers on Drop
         client.add_event_handler({
@@ -116,7 +125,7 @@ impl Monitor {
         let signaling = MatrixSignaling::new(
             client.clone(),
             self.device_id.clone(),
-            event_id,
+            event_id.clone(),
             Some(SessionInfo {
                 peer_user_id,
                 peer_device_id: None,
@@ -133,9 +142,33 @@ impl Monitor {
                 .map(|x| x.as_str())
                 .collect(),
         )?;
+        // TODO: handle errors
         let _download_task = tokio::spawn({
+            let matrix_log = self.matrix_log.clone();
             let output_dir = self.output_dir.clone();
-            async move { download::transfer(output_dir, transport, offer_content).await }
+            let event_id = event_id.clone();
+            async move {
+                let matrix_log = matrix_log.clone();
+                {
+                    let matrix_log = matrix_log.lock().await;
+                    // TODO: handle errors
+                    let _ignore = matrix_log
+                        .log(&format!("Download of event {} starting", event_id))
+                        .await;
+                }
+                // TODO: handle errors
+                let status = download::transfer(output_dir, transport, offer_content).await;
+                {
+                    let matrix_log = matrix_log.lock().await;
+                    // TODO: handle errors
+                    let _ignore = matrix_log
+                        .log(&format!(
+                            "Downloading of event {} finished: {:?}",
+                            event_id, status
+                        ))
+                        .await;
+                }
+            }
         });
         Ok(())
     }
@@ -150,7 +183,9 @@ pub async fn monitor(
     output_dir: &str,
     rooms: Option<Vec<String>>,
 ) -> Result<(), Error> {
-    let (client, device_id, first_sync_response) = matrix_common::init(&config).await?;
+    let (client, device_id, first_sync_response, matrix_log) = matrix_common::init(&config).await?;
+
+    matrix_log.log("Starting monitor").await?;
 
     let sync_settings = SyncSettings::default().token(first_sync_response.next_batch);
 
@@ -168,9 +203,29 @@ pub async fn monitor(
     };
 
     info!("Finished initial sync, waiting for offers");
-    let (_monitor, mut results) =
-        Monitor::new(&client, device_id, config, output_dir.to_string(), rooms);
+    matrix_log.log("Monitoring offers").await?;
+
+    let exit_signal = LevelEvent::new();
+    tokio::spawn({
+        let exit_signal = exit_signal.clone();
+        async move {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to listen for ctrl-c");
+            exit_signal.issue().await;
+        }
+    });
+
+    let (_monitor, mut results) = Monitor::new(
+        &client,
+        device_id,
+        config,
+        output_dir.to_string(),
+        rooms,
+        matrix_log.clone(),
+    );
     select! {
+    	_exit = exit_signal.wait() => (),
 	done2 = results.recv() => {
 	    done2.unwrap_or(Err(Error::InternalError(
                 "Failed to read results channel".to_string(),
@@ -180,6 +235,7 @@ pub async fn monitor(
 	    done?;
 	}
     }
+    matrix_log.log("Monitoring stopped").await?;
 
     Ok(())
 }

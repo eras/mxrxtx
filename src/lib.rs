@@ -4,6 +4,7 @@ pub mod console;
 pub mod download;
 pub mod level_event;
 pub mod matrix_common;
+pub mod matrix_log;
 pub mod matrix_signaling;
 pub mod matrix_verify;
 pub mod monitor;

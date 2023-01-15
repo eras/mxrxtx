@@ -1,4 +1,4 @@
-use crate::config;
+use crate::{config, matrix_log};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
 use matrix_sdk::ruma::OwnedDeviceId;
@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error(transparent)]
     ConfigError(#[from] config::Error),
+
+    #[error(transparent)]
+    MatrixLogError(#[from] matrix_log::Error),
 }
 
 enum RoomType {
@@ -160,13 +163,15 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
     Ok(room)
 }
 
-pub async fn init(config: &config::Config) -> Result<(Client, OwnedDeviceId, SyncResponse), Error> {
+pub async fn init(
+    config: &config::Config,
+) -> Result<(Client, OwnedDeviceId, SyncResponse, matrix_log::MatrixLog), Error> {
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
         // .filter(just_joined_rooms_filter())
         // .full_state(true);
-;
+	;
     let client = Client::builder()
         .server_name(session.user_id.server_name())
         .sled_store(&config.state_dir, None)
@@ -179,5 +184,7 @@ pub async fn init(config: &config::Config) -> Result<(Client, OwnedDeviceId, Syn
     info!("Sync");
     let sync_response = client.sync_once(sync_settings).await?;
 
-    Ok((client, device_id, sync_response))
+    let matrix_log = matrix_log::MatrixLog::new(&client, config).await?;
+
+    Ok((client, device_id, sync_response, matrix_log))
 }

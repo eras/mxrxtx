@@ -1,5 +1,5 @@
 use crate::{
-    config, console,
+    config, console, matrix_common,
     utils::{escape, escape_paths},
 };
 use directories_next::ProjectDirs;
@@ -44,6 +44,9 @@ pub enum Error {
 
     #[error(transparent)]
     MatrixVerifyError(#[from] crate::matrix_verify::Error),
+
+    #[error(transparent)]
+    MatrixCommonError(#[from] matrix_common::Error),
 }
 
 fn project_dir() -> Option<ProjectDirs> {
@@ -194,6 +197,27 @@ pub async fn setup_mode(
         "Login successful. Saved configuration to {}",
         escape(config_file)
     );
+
+    console::print(
+        "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none? ",
+    )
+    .await?;
+    let log_room = console::read_line().await?.ok_or(Error::NoInputError)?;
+    drop(client);
+    if !log_room.is_empty() {
+        // create a new client with loaded data and state
+        let session = config.get_matrix_session()?;
+        let client = Client::builder()
+            .server_name(user_id.server_name())
+            .build()
+            .await?;
+        client.restore_session(session).await?;
+
+        let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
+        config.log_room = Some(log_room.room_id().to_string());
+        config.save(config_file)?;
+        info!("Saved configuration");
+    }
 
     info!("Starting emoji verification. Press ^C to skip.");
     crate::matrix_verify::verify(config).await?;
