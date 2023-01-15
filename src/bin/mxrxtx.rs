@@ -42,6 +42,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .long("config")
                 .short('c')
                 .takes_value(true)
+                .value_name("FILE")
                 .help(
                     format!(
                         "Config file to load, defaults to {}",
@@ -54,6 +55,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
             clap::Arg::new("output-dir")
                 .long("output")
                 .short('O')
+                .value_name("DIRECTORY")
                 .default_value(".")
                 .help(
                     "Directory to use for downloading, defaults to ."
@@ -74,6 +76,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .short('d')
                 .long("download")
                 .takes_value(true)
+                .value_name("URL")
                 .multiple_values(true)
                 .min_values(1)
                 .help("Download files offered by a given Matrix event, given as a matrix: or https://matrix.to url"),
@@ -84,13 +87,15 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .long("offer")
                 .takes_value(true)
                 .multiple_values(true)
+                .value_name("ROOM+FILES")
                 .min_values(2)
-                .help("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
+                .help("Offer the list of files provided after room pointed by the first argument; the following arguments are the local file names."),
         )
         .arg(clap::Arg::new("monitor")
                 .short('m')
                 .long("monitor")
                 .multiple_values(true)
+                .value_name("ROOM")
                 .min_values(0)
                 .help("Monitor listed rooms for offers and download them when they appear; if no rooms listed, monitor all."),
         )
