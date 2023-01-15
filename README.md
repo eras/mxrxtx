@@ -30,7 +30,13 @@ The intent of this tool is to work as a prototype for eventually
 specifying _solid_ WebRTC file transfer functionality for the Matrix
 spec.
 
-__Note: `mxrxtx` does not yet support encryption.__
+`mxrxtx` supports end-to-end encryption. You may do the emoji
+verification at the end of the `--setup`, or separately with the
+`--verify` switch. (Verification is not possible in other modes of
+operation.) __Note that `mxrxtx` will automatically accept whichever
+emojis it gets to show__: if you notice any discrepancy here while
+doing the verification, you should remove the state store and maybe
+weed out those hackers from the homeserver..
 
 # Usage
 ## `mxrxtx --setup`
