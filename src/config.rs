@@ -85,7 +85,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn save(self, filename: &str) -> Result<(), Error> {
+    pub fn save(&self, filename: &str) -> Result<(), Error> {
         let mut config_dir = Path::new(filename).to_path_buf();
         config_dir.pop();
         std::fs::create_dir_all(config_dir)?;

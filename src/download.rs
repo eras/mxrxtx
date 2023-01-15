@@ -214,7 +214,13 @@ pub async fn download(
     let event_id = get_event_id_from_uri(&uri)?;
     let event = room.event(event_id.as_ref()).await?;
 
-    let offer = serde_json::from_str::<protocol::SyncOffer>(event.event.json().get())?;
+    let offer = match serde_json::from_str::<protocol::SyncOffer>(event.event.json().get()) {
+        Ok(x) => x,
+        err @ Err(_) => {
+            debug!("event: {event:?}");
+            err?
+        }
+    };
     debug!("offer: {offer:?}");
 
     let id = protocol::Uuid::new_v4();

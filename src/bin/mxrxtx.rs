@@ -1,5 +1,5 @@
 #![deny(clippy::all)]
-use mxrxtx::{config, download, offer, setup, version::get_version};
+use mxrxtx::{config, download, matrix_verify, offer, setup, version::get_version};
 
 use thiserror::Error;
 
@@ -19,12 +19,13 @@ pub enum Error {
 
     #[error(transparent)]
     DownloadError(#[from] download::Error),
+
+    #[error(transparent)]
+    VerifyError(#[from] matrix_verify::Error),
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=info"))
-        .init();
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
 	.before_help("Licensed under the MIT license")
@@ -62,6 +63,11 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .help("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
         )
         .arg(
+            clap::Arg::new("verify")
+                .long("verify")
+                .help("Run emoji verification (start verification from another session)"),
+        )
+        .arg(
             clap::Arg::new("download")
                 .short('d')
                 .long("download")
@@ -79,10 +85,20 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .min_values(2)
                 .help("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
         )
+        .arg(clap::Arg::new("trace")
+             .long("trace")
+             .help("Enable tracing"))
 	.group(clap::ArgGroup::new("mode")
-               .args(&["offer", "download", "setup"])
+               .args(&["offer", "download", "setup", "verify"])
                .required(true))
         .get_matches();
+
+    if args.is_present("trace") {
+        tracing_subscriber::fmt::init();
+    } else {
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=info"))
+            .init();
+    }
 
     let config_file = setup::get_config_file(args.value_of("config"))?;
     let config = config::Config::load(&config_file)?;
@@ -91,6 +107,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
+    } else if args.is_present("verify") {
+        matrix_verify::verify(config).await?;
     } else if args.is_present("download") {
         let args: Vec<String> = args
             .values_of_t("download")
