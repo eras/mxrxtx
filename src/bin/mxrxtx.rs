@@ -62,7 +62,7 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
         .arg(
             clap::Arg::new("setup")
                 .long("setup")
-                .help("Do setup (prompt matrix homeserver address, user account, password, TODO: setup e2ee)"),
+                .help("Do setup (prompt matrix homeserver address, user account, password, setup e2ee)"),
         )
         .arg(
             clap::Arg::new("verify")
