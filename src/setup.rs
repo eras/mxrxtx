@@ -5,7 +5,6 @@ use crate::{
 use directories_next::ProjectDirs;
 use matrix_sdk::Client;
 use std::convert::TryFrom;
-use std::io::{stdin, stdout};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -102,53 +101,30 @@ pub async fn setup_mode(
     mut config: config::Config,
     config_file: &str,
 ) -> Result<(), Error> {
-    let join = tokio::task::spawn_blocking({
-        move || {
-            let stdout = stdout();
-            let mut stdout = stdout.lock();
-            let stdin = stdin();
-            let mut stdin = stdin.lock();
-
-            let mxid = {
-                console::print(&mut stdout, "Matrix id (e.g. @user:example.org): ")?;
-                console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?
-            };
-
-            console::print(
-                &mut stdout,
-                "Device display name (empty to use default device name \"mxrxtx\"): ",
-            )?;
-            let device_name = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
-            let device_name = if device_name.is_empty() {
-                "mxrxtx".to_string()
-            } else {
-                device_name
-            };
-
-            console::print(
-                &mut stdout,
-                "Device id (empty to use default automatically generated id): ",
-            )?;
-            let device_id = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
-            let device_id = if device_id.is_empty() {
-                None
-            } else {
-                Some(device_id)
-            };
-
-            console::print(&mut stdout, "Password: ")?;
-            let password =
-                console::read_passwd(&mut stdin, &mut stdout)?.ok_or(Error::NoInputError)?;
-            console::print(&mut stdout, "\n")?;
-
-            Ok((mxid, password, device_id, device_name))
-        }
-    });
-    let (mxid, password, device_id, device_name) = match join.await {
-        Ok(Ok(x)) => x,
-        Ok(Err(x)) => return Err(x),
-        Err(_) => return Err(Error::SetupError(String::from("Failed to wait setup"))),
+    let mxid = {
+        console::print("Matrix id (e.g. @user:example.org): ").await?;
+        console::read_line().await?.ok_or(Error::NoInputError)?
     };
+
+    console::print("Device display name (empty to use default device name \"mxrxtx\"): ").await?;
+    let device_name = console::read_line().await?.ok_or(Error::NoInputError)?;
+    let device_name = if device_name.is_empty() {
+        "mxrxtx".to_string()
+    } else {
+        device_name
+    };
+
+    console::print("Device id (empty to use default automatically generated id): ").await?;
+    let device_id = console::read_line().await?.ok_or(Error::NoInputError)?;
+    let device_id = if device_id.is_empty() {
+        None
+    } else {
+        Some(device_id)
+    };
+
+    console::print("Password: ").await?;
+    let password = console::read_passwd().await?.ok_or(Error::NoInputError)?;
+    console::print("\n").await?;
     let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
     let client = Client::builder()
@@ -167,62 +143,44 @@ pub async fn setup_mode(
     let login = login.send().await?;
     let device_id = login.device_id.clone();
 
-    let join = tokio::task::spawn_blocking({
-        move || {
-            let stdout = stdout();
-            let mut stdout = stdout.lock();
-            let stdin = stdin();
-            let mut stdin = stdin.lock();
-
-            let default_state_dir = project_dir()
-                .map(|project_dir| {
-                    let mut path = project_dir.cache_dir().to_path_buf();
-                    path.push(escape_paths(device_id.as_ref()));
-                    path
-                })
-                .unwrap_or_else(|| Path::new(&escape_paths(device_id.as_ref())).to_path_buf());
-            console::print(
-                &mut stdout,
-                &format!(
-                    "State directory (empty to use default state directory \"{}\"): ",
-                    escape(&default_state_dir.to_string_lossy())
-                ),
-            )?;
-            let state_dir = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
-            if let Some(parent) = Path::new(&state_dir).parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let state_dir = if state_dir.is_empty() {
-                default_state_dir
-            } else {
-                Path::new(&state_dir).to_path_buf()
-            };
-
-            let default_ice_servers = DEFAULT_ICE_SERVERS.join(", ");
-            console::print(&mut stdout, &format!(
-                    "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers): "
-	    ))?;
-            let ice_servers = console::read_line(&mut stdin)?.ok_or(Error::NoInputError)?;
-            let ice_servers = if ice_servers.is_empty() {
-                default_ice_servers
-            } else if &ice_servers == "-" {
-                "".to_string()
-            } else {
-                ice_servers
-            };
-            let ice_servers: Vec<String> = ice_servers
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect();
-
-            Ok((state_dir, ice_servers))
-        }
-    });
-    let (state_dir, ice_servers) = match join.await {
-        Ok(Ok(x)) => x,
-        Ok(Err(x)) => return Err(x),
-        Err(_) => return Err(Error::SetupError(String::from("Failed to wait setup"))),
+    let default_state_dir = project_dir()
+        .map(|project_dir| {
+            let mut path = project_dir.cache_dir().to_path_buf();
+            path.push(escape_paths(device_id.as_ref()));
+            path
+        })
+        .unwrap_or_else(|| Path::new(&escape_paths(device_id.as_ref())).to_path_buf());
+    console::print(&format!(
+        "State directory (empty to use default state directory \"{}\"): ",
+        escape(&default_state_dir.to_string_lossy())
+    ))
+    .await?;
+    let state_dir = console::read_line().await?.ok_or(Error::NoInputError)?;
+    if let Some(parent) = Path::new(&state_dir).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let state_dir = if state_dir.is_empty() {
+        default_state_dir
+    } else {
+        Path::new(&state_dir).to_path_buf()
     };
+
+    let default_ice_servers = DEFAULT_ICE_SERVERS.join(", ");
+    console::print(&format!(
+                    "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers): "
+	    )).await?;
+    let ice_servers = console::read_line().await?.ok_or(Error::NoInputError)?;
+    let ice_servers = if ice_servers.is_empty() {
+        default_ice_servers
+    } else if &ice_servers == "-" {
+        "".to_string()
+    } else {
+        ice_servers
+    };
+    let ice_servers: Vec<String> = ice_servers
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
 
     config.user_id = user_id.to_string();
     config.access_token = login.access_token;
