@@ -241,13 +241,25 @@ pub async fn setup_mode(
     );
 
     drop(client);
-    if let Some(log_room) = prompt_log_room(&config).await? {
-        config.log_room = Some(log_room);
-        config.save(config_file)?;
-        info!("Saved configuration");
+    match prompt_log_room(&config).await {
+        Ok(Some(log_room)) => {
+            config.log_room = Some(log_room);
+            config.save(config_file)?;
+            info!("Saved configuration");
+        }
+        Ok(None) => (),
+        Err(err) => {
+            error!(
+                "There was an error: {err:?}. Continuing with emoji verification anyway.\n\
+		 You can edit the configuration to enable the log room."
+            );
+        }
     }
 
-    info!("Starting emoji verification. Press ^C to skip.");
+    info!(
+        "Starting emoji verification. Press ^C to skip. \
+	 You may restart verification later with mxrxtx verify."
+    );
     crate::matrix_verify::verify(config).await?;
 
     Ok(())
