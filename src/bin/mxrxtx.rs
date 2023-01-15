@@ -30,12 +30,13 @@ pub enum Error {
 async fn main() -> Result<(), Error> {
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
+        .setting(clap::AppSettings::ArgRequiredElseHelp)
         .before_help("Licensed under the MIT license")
         .version(get_version().as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about(
-            "Transfer files over Matrix, directly from client to client with WebRTC. \
-	     \
+            "Transfer files over Matrix, directly from client to client with WebRTC. \n\
+	     \n\
 	     Licensed under the MIT license; refer to LICENSE.MIT for details.",
         )
         .arg(
