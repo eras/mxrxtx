@@ -1,4 +1,3 @@
-#![deny(clippy::all)]
 use mxrxtx::{config, download, matrix_verify, offer, setup, version::get_version};
 
 use thiserror::Error;
