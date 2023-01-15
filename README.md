@@ -31,8 +31,8 @@ specifying _solid_ WebRTC file transfer functionality for the Matrix
 spec.
 
 `mxrxtx` supports end-to-end encryption. You may do the emoji
-verification at the end of the `--setup`, or separately with the
-`--verify` switch. (Verification is not possible in other modes of
+verification at the end of the `setup`, or separately with the
+`verify` subcommand. (Verification is not possible in other modes of
 operation.) __Note that `mxrxtx` will automatically accept whichever
 emojis it gets to show__: if you notice any discrepancy here while
 doing the verification, you should remove the state store and maybe
@@ -40,7 +40,7 @@ weed out those hackers from the homeserver..
 
 # Usage
 ## Setting up
-Run the initial setup with `mxrxtx --setup`. You may provide an alternative config file with
+Run the initial setup with `mxrxtx setup`. You may provide an alternative config file with
 `--config`; otherwise config file location relevant to your system is
 used.
 
@@ -48,7 +48,7 @@ The idea is to use this tool with the credentials of the account you
 use instead of creating new bot credentials for it. It does not
 have the ability to e.g. join rooms.
 ## Offer a file
-Offer a file with `mxrxtx --offer '#roomalias:example.com' hello.txt
+Offer a file with `mxrxtx offer '#roomalias:example.com' hello.txt
 hello.png`. You may also the room name (case insensitive) or the room
 id and the client needs to be present in that room. The command
 outputs the matrix.to url for the shared files, which is shared as a
@@ -56,12 +56,13 @@ single collection.
 
 The offer is withdrawn when `mxrxtx` exits.
 ## Download a file
-You can download a file with `mxrxtx --download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-urls.
+You can download a file with `mxrxtx download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-urls.
 
 Starts download of a particular file being offered. As the file names
 are defined by the original event, it may be advisable to use the
-`--output-dir` switch to create a new directory.
+`--output-dir` switch before the `download` subcommand to create a new
+directory.
 ## Keep downloading any offers
 To download any offered files, you can use `mxrxtx
---monitor`. (`--output-dir` is advisable here as well.) It will only
+monitor`. (`--output-dir` is advisable here as well.) It will only
 consider new events synced after starting the tool.

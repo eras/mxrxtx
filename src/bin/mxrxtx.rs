@@ -30,13 +30,14 @@ pub enum Error {
 async fn main() -> Result<(), Error> {
     let args = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
-	.before_help("Licensed under the MIT license")
+        .before_help("Licensed under the MIT license")
         .version(get_version().as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
-        .about("Transfer files over Matrix, directly from client to client with WebRTC.
-
-Licensed under the MIT license; refer to LICENSE.MIT for details.
-")
+        .about(
+            "Transfer files over Matrix, directly from client to client with WebRTC. \
+	     \
+	     Licensed under the MIT license; refer to LICENSE.MIT for details.",
+        )
         .arg(
             clap::Arg::new("config")
                 .long("config")
@@ -57,54 +58,67 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .short('O')
                 .value_name("DIRECTORY")
                 .default_value(".")
-                .help(
-                    "Directory to use for downloading, defaults to ."
-                ),
+                .help("Directory to use for downloading, defaults to ."),
         )
-        .arg(
-            clap::Arg::new("setup")
-                .long("setup")
-                .help("Do setup (prompt matrix homeserver address, user account, password, setup e2ee)"),
-        )
-        .arg(
-            clap::Arg::new("verify")
-                .long("verify")
+        .subcommand(clap::Command::new("setup").help(
+            "Do setup (prompt matrix homeserver address, user account, password, setup e2ee)",
+        ))
+        .subcommand(
+            clap::Command::new("verify")
                 .help("Run emoji verification (start verification from another session)"),
         )
-        .arg(
-            clap::Arg::new("download")
-                .short('d')
-                .long("download")
-                .takes_value(true)
-                .value_name("URL")
-                .multiple_values(true)
-                .min_values(1)
-                .help("Download files offered by a given Matrix event, given as a matrix: or https://matrix.to url"),
+        .subcommand(
+            clap::Command::new("download").arg(
+                clap::Arg::new("url")
+                    .index(1)
+                    .required(true)
+                    .value_name("URL")
+                    .multiple_values(false)
+                    .min_values(1)
+                    .help(
+                        "Download files offered by a given Matrix event, given as a matrix: \
+			  or https://matrix.to url",
+                    ),
+            ),
         )
-        .arg(
-            clap::Arg::new("offer")
-                .short('o')
-                .long("offer")
-                .takes_value(true)
-                .multiple_values(true)
-                .value_name("ROOM+FILES")
-                .min_values(2)
-                .help("Offer the list of files provided after room pointed by the first argument; the following arguments are the local file names."),
+        .subcommand(
+            clap::Command::new("offer")
+                .arg(
+                    clap::Arg::new("room")
+                        .index(1)
+                        .required(true)
+                        .takes_value(true)
+                        .multiple_values(false)
+                        .value_name("ROOM")
+                        .help("Offer the file in this room"),
+                )
+                .arg(
+                    clap::Arg::new("files")
+                        .index(2)
+                        .required(true)
+                        .takes_value(true)
+                        .multiple_values(true)
+                        .value_name("FILE")
+                        .min_values(1)
+                        .help("Files to offer"),
+                ),
         )
-        .arg(clap::Arg::new("monitor")
-                .short('m')
-                .long("monitor")
-                .multiple_values(true)
-                .value_name("ROOM")
-                .min_values(0)
-                .help("Monitor listed rooms for offers and download them when they appear; if no rooms listed, monitor all."),
+        .subcommand(
+            clap::Command::new("monitor").arg(
+                clap::Arg::new("rooms")
+                    .multiple_values(true)
+                    .index(1)
+                    .required(false)
+                    .value_name("ROOM")
+                    .min_values(0)
+                    .index(1)
+                    .help(
+                        "Monitor listed rooms for offers and download them when they appear; \
+			  if no rooms listed, monitor all.",
+                    ),
+            ),
         )
-        .arg(clap::Arg::new("trace")
-             .long("trace")
-             .help("Enable tracing"))
-	.group(clap::ArgGroup::new("mode")
-               .args(&["offer", "download", "setup", "verify", "monitor"])
-               .required(true))
+        .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"))
         .get_matches();
 
     if args.is_present("trace") {
@@ -119,35 +133,44 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     let output_dir = args.value_of("output-dir").unwrap();
 
-    if args.is_present("setup") {
-        setup::setup_mode(args, config, &config_file).await?
-    } else if args.is_present("monitor") {
-        let rooms: Vec<String> = args
-            .values_of_t("monitor")
-            .expect("clap arguments should ensure this");
-        monitor::monitor(
-            config,
-            output_dir,
-            if rooms.is_empty() { None } else { Some(rooms) },
-        )
-        .await?;
-    } else if args.is_present("verify") {
-        matrix_verify::verify(config).await?;
-    } else if args.is_present("download") {
-        let args: Vec<String> = args
-            .values_of_t("download")
-            .expect("clap arguments should ensure this");
-        let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-        download::download(config, urls, output_dir).await?;
-    } else if args.is_present("offer") {
-        let args: Vec<String> = args
-            .values_of_t("offer")
-            .expect("clap arguments should ensure this");
-        let room = &args[0];
-        let files: Vec<&str> = args[1..args.len()].iter().map(|x| x.as_str()).collect();
-        offer::offer(config, room, files).await?;
-    } else {
-        panic!("Clap group should ensure at least one of these is set..");
+    match args.subcommand() {
+        Some(("setup", _sub_args)) => setup::setup_mode(args, config, &config_file).await?,
+        Some(("monitor", monitor_args)) => {
+            let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
+            monitor::monitor(
+                config,
+                output_dir,
+                if rooms.is_empty() { None } else { Some(rooms) },
+            )
+            .await?;
+        }
+        Some(("verify", _sub_args)) => {
+            matrix_verify::verify(config).await?;
+        }
+        Some(("download", download_args)) => {
+            let args: Vec<String> = download_args
+                .values_of_t("url")
+                .expect("clap arguments should ensure this");
+            let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
+            download::download(config, urls, output_dir).await?;
+        }
+        Some(("offer", offer_args)) => {
+            let room_args: Vec<String> = offer_args
+                .values_of_t("room")
+                .expect("clap arguments should ensure this");
+            let room = &room_args[0];
+            let files_args: Vec<String> = offer_args
+                .values_of_t("files")
+                .expect("clap arguments should ensure this");
+            let files: Vec<&str> = files_args[1..files_args.len()]
+                .iter()
+                .map(|x| x.as_str())
+                .collect();
+            offer::offer(config, room, files).await?;
+        }
+        _ => {
+            eprintln!("A subcommand is required. --help for help.");
+        }
     }
 
     Ok(())
