@@ -21,8 +21,8 @@ pub enum Error {
     #[error("Matrix room not found: {}", .0)]
     NoSuchRoomError(String),
 
-    #[error("Multiple matrix rooms matching pattern found: {}", .0)]
-    MultipleRoomNameMatchesError(String),
+    #[error("Multiple matrix rooms matching pattern found matching {}: {:?}", .0, .1)]
+    MultipleRoomNameMatchesError(String, Vec<String>),
 
     #[error("Room id/name must start with either ! or #: {}", .0)]
     RoomNameError(String),
@@ -42,19 +42,16 @@ pub enum Error {
 
 enum RoomType {
     RoomId,
-    RoomName,
+    RoomAlias,
 }
 
 impl RoomType {
     fn classify(name: &str) -> Result<RoomType, Error> {
-        let ch0 = name
-            .chars()
-            .next()
-            .expect("Room name should have at least one character");
-        if ch0 == '!' {
+        let ch0 = name.chars().next();
+        if ch0 == Some('!') {
             Ok(RoomType::RoomId)
-        } else if ch0 == '#' {
-            Ok(RoomType::RoomName)
+        } else if ch0 == Some('#') {
+            Ok(RoomType::RoomAlias)
         } else {
             Err(Error::RoomNameError(name.to_string()))
         }
@@ -83,15 +80,19 @@ pub(crate) fn just_joined_rooms_filter() -> sync_events::v3::Filter {
     sync_events::v3::Filter::FilterDefinition(filter_def)
 }
 
+fn room_strings(rooms: &[&Joined]) -> Vec<String> {
+    rooms.iter().map(|x| format!("{:?}", x)).collect()
+}
+
 pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Result<Joined, Error> {
-    let room = match RoomType::classify(room)? {
-        RoomType::RoomId => {
+    let room = match RoomType::classify(room) {
+        Ok(RoomType::RoomId) => {
             let room_id = <&matrix_sdk::ruma::RoomId>::try_from(room)?.to_owned();
             client
                 .get_joined_room(&room_id)
                 .ok_or(Error::NoSuchRoomError(String::from(room)))?
         }
-        RoomType::RoomName => {
+        Ok(RoomType::RoomAlias) => {
             let rooms = client.joined_rooms();
             let room_alias = client
                 .resolve_room_alias(&matrix_sdk::ruma::RoomAliasId::parse(room)?)
@@ -100,11 +101,60 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
                 .iter()
                 .filter(|&joined_room| joined_room.room_id() == room_alias.room_id)
                 .collect();
-            match matching.len() {
-                1 => matching[0].clone(),
-                x if x > 1 => return Err(Error::MultipleRoomNameMatchesError(String::from(room))),
-                _ => return Err(Error::NoSuchRoomError(String::from(room))),
+            match &matching[..] {
+                [room] => (*room).clone(),
+                rooms @ [_, _, ..] => {
+                    return Err(Error::MultipleRoomNameMatchesError(
+                        String::from(room),
+                        room_strings(rooms),
+                    ))
+                }
+                [] => return Err(Error::NoSuchRoomError(String::from(room))),
             }
+        }
+        Err(err @ Error::RoomNameError(_)) => {
+            // match by room name
+            if room.is_empty() {
+                return Err(err);
+            } else {
+                let room_name = room.to_string();
+                let room_name_lc = room_name.to_lowercase();
+                let joined = client.joined_rooms();
+                // First try to match in a non-case-sensitive manner
+                let matching_rooms_nocase: Vec<_> = joined
+                    .iter()
+                    .filter(|joined_room| {
+                        joined_room.name().map(|x| x.to_lowercase()).as_ref() == Some(&room_name_lc)
+                    })
+                    .cloned()
+                    .collect();
+                match &matching_rooms_nocase[..] {
+                    [] => return Err(Error::NoSuchRoomError(room_name)),
+                    [room] => room.clone(),
+                    [_, _, ..] => {
+                        // Next try only exact matches
+                        let matching_rooms_case: Vec<_> = joined
+                            .iter()
+                            .filter(|joined_room| joined_room.name().as_ref() == Some(&room_name))
+                            .cloned()
+                            .collect();
+                        match &matching_rooms_case[..] {
+                            [] => return Err(Error::NoSuchRoomError(room_name)),
+                            rooms @ [_, _, ..] => {
+                                return Err(Error::MultipleRoomNameMatchesError(
+                                    room_name,
+                                    // lol
+                                    room_strings(rooms.iter().collect::<Vec<_>>().as_slice()),
+                                ));
+                            }
+                            [room] => room.clone(),
+                        }
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            return Err(err);
         }
     };
     Ok(room)
