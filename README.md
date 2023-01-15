@@ -32,7 +32,7 @@ spec.
 
 `mxrxtx` supports end-to-end encryption. You may do the emoji
 verification at the end of the `setup`, or separately with the
-`verify` subcommand. (Verification is not possible in other modes of
+`verify` sub-command. (Verification is not possible in other modes of
 operation.) __Note that `mxrxtx` will automatically accept whichever
 emojis it gets to show__: if you notice any discrepancy here while
 doing the verification, you should remove the state store and maybe
@@ -49,18 +49,18 @@ use instead of creating new bot credentials for it. It does not
 have the ability to e.g. join rooms.
 ## Offer a file
 Offer a file with `mxrxtx offer '#roomalias:example.com' hello.txt
-hello.png`. You may also the room name (case insensitive) or the room
+hello.png`. You may also use the room name (case insensitive) or the room
 id and the client needs to be present in that room. The command
-outputs the matrix.to url for the shared files, which is shared as a
+outputs the matrix.to URL for the shared files, which is shared as a
 single collection.
 
 The offer is withdrawn when `mxrxtx` exits.
 ## Download a file
-You can download a file with `mxrxtx download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-urls.
+You can download a file with `mxrxtx download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-URLs.
 
 Starts download of a particular file being offered. As the file names
 are defined by the original event, it may be advisable to use the
-`--output-dir` switch before the `download` subcommand to create a new
+`--output-dir` switch before the `download` sub-command to create a new
 directory.
 ## Keep downloading any offers
 To download any offered files, you can use `mxrxtx
