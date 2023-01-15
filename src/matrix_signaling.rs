@@ -60,7 +60,7 @@ fn update_session_info(
                     session_info.peer_device_id = event.content.device_id.clone();
                 }
             } else {
-                error!(
+                debug!(
                     "Ignoring event with unknown id {} vs current {}",
                     id, session_info.id
                 );
@@ -107,7 +107,7 @@ async fn matrix_signaling_event_handler(
                         }
                     }
                 } else {
-                    error!(
+                    debug!(
                         "Ignoring event with unknown event id {} vs current {}",
                         &event
                             .content

@@ -117,7 +117,15 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
     } else if args.is_present("monitor") {
-        monitor::monitor(config, output_dir).await?;
+        let rooms: Vec<String> = args
+            .values_of_t("monitor")
+            .expect("clap arguments should ensure this");
+        monitor::monitor(
+            config,
+            output_dir,
+            if rooms.is_empty() { None } else { Some(rooms) },
+        )
+        .await?;
     } else if args.is_present("verify") {
         matrix_verify::verify(config).await?;
     } else if args.is_present("download") {

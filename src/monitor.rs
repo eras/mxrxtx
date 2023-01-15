@@ -5,7 +5,10 @@ use crate::{
 };
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::OwnedDeviceId;
-use matrix_sdk::Client;
+use matrix_sdk::{
+    room::{Joined, Room},
+    Client,
+};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
@@ -35,6 +38,8 @@ struct Monitor {
     config: config::Config,
     results_send: mpsc::UnboundedSender<Result<(), Error>>,
     output_dir: String,
+    rooms: Option<Vec<Joined>>,
+    client: Client,
 }
 
 impl Monitor {
@@ -43,6 +48,7 @@ impl Monitor {
         device_id: OwnedDeviceId,
         config: config::Config,
         output_dir: String,
+        rooms: Option<Vec<Joined>>,
     ) -> (
         Arc<Mutex<Monitor>>,
         mpsc::UnboundedReceiver<Result<(), Error>>,
@@ -53,15 +59,17 @@ impl Monitor {
             config,
             results_send,
             output_dir,
+            rooms,
+            client: client.clone(),
         }));
         // TODO: remove added event handlers on Drop
         client.add_event_handler({
             let monitor = monitor.clone();
-            move |ev: protocol::SyncOffer, client: Client| {
+            move |ev: protocol::SyncOffer, room: Room| {
                 let monitor = monitor.clone();
                 async move {
                     let mut monitor = monitor.lock().await;
-                    let result = monitor.on_offer(ev, client).await;
+                    let result = monitor.on_offer(ev, room).await;
                     monitor.handle_error_result(result);
                 }
             }
@@ -79,7 +87,23 @@ impl Monitor {
         }
     }
 
-    async fn on_offer(&mut self, offer: protocol::SyncOffer, client: Client) -> Result<(), Error> {
+    async fn on_offer(&mut self, offer: protocol::SyncOffer, room: Room) -> Result<(), Error> {
+        let client = &self.client;
+        let room = match room {
+            Room::Joined(joined) => joined,
+            _ => return Ok(()), // ignore other rooms
+        };
+        let want_download = match &self.rooms {
+            None => true,
+            Some(rooms) => rooms
+                .iter()
+                .map(|x| x.room_id())
+                .collect::<Vec<_>>()
+                .contains(&room.room_id()),
+        };
+        if !want_download {
+            return Ok(());
+        }
         let peer_user_id = offer.sender().to_owned();
         let event_id = offer.event_id().to_owned();
         let offer_content: protocol::OfferContent = match offer {
@@ -118,14 +142,35 @@ impl Monitor {
     }
 }
 
+// fn check_room(&self, event) {
+// }
+
 #[rustfmt::skip::macros(select)]
-pub async fn monitor(config: config::Config, output_dir: &str) -> Result<(), Error> {
+pub async fn monitor(
+    config: config::Config,
+    output_dir: &str,
+    rooms: Option<Vec<String>>,
+) -> Result<(), Error> {
     let (client, device_id, first_sync_response) = matrix_common::init(&config).await?;
 
     let sync_settings = SyncSettings::default().token(first_sync_response.next_batch);
 
+    let rooms = match rooms {
+        None => None,
+        Some(rooms) => Some(
+            futures::future::try_join_all(
+                rooms
+                    .iter()
+                    .map(|room| matrix_common::get_joined_room_by_name(&client, room))
+                    .collect::<Vec<_>>(),
+            )
+            .await?,
+        ),
+    };
+
     info!("Finished initial sync, waiting for offers");
-    let (_monitor, mut results) = Monitor::new(&client, device_id, config, output_dir.to_string());
+    let (_monitor, mut results) =
+        Monitor::new(&client, device_id, config, output_dir.to_string(), rooms);
     select! {
 	done2 = results.recv() => {
 	    done2.unwrap_or(Err(Error::InternalError(
