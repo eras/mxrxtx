@@ -1,4 +1,4 @@
-use mxrxtx::{config, download, matrix_verify, offer, setup, version::get_version};
+use mxrxtx::{config, download, matrix_verify, monitor, offer, setup, version::get_version};
 
 use thiserror::Error;
 
@@ -21,6 +21,9 @@ pub enum Error {
 
     #[error(transparent)]
     VerifyError(#[from] matrix_verify::Error),
+
+    #[error(transparent)]
+    MonitorError(#[from] monitor::Error),
 }
 
 #[tokio::main]
@@ -84,11 +87,18 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
                 .min_values(2)
                 .help("Offer the list of files provided after room pointer by the first argument; the following arguments are the local file names."),
         )
+        .arg(clap::Arg::new("monitor")
+                .short('m')
+                .long("monitor")
+                .multiple_values(true)
+                .min_values(0)
+                .help("Monitor listed rooms for offers and download them when they appear; if no rooms listed, monitor all."),
+        )
         .arg(clap::Arg::new("trace")
              .long("trace")
              .help("Enable tracing"))
 	.group(clap::ArgGroup::new("mode")
-               .args(&["offer", "download", "setup", "verify"])
+               .args(&["offer", "download", "setup", "verify", "monitor"])
                .required(true))
         .get_matches();
 
@@ -106,6 +116,8 @@ Licensed under the MIT license; refer to LICENSE.MIT for details.
 
     if args.is_present("setup") {
         setup::setup_mode(args, config, &config_file).await?
+    } else if args.is_present("monitor") {
+        monitor::monitor(config, output_dir).await?;
     } else if args.is_present("verify") {
         matrix_verify::verify(config).await?;
     } else if args.is_present("download") {
