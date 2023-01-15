@@ -24,7 +24,7 @@ pub enum Error {
     MatrixCommonError(#[from] matrix_common::Error),
 
     #[error(transparent)]
-    RumaError(#[from] matrix_sdk::Error),
+    MatrixSdkError(#[from] matrix_sdk::Error),
 
     #[error("Error: {}", .0)]
     InternalError(String),
@@ -98,8 +98,7 @@ impl Monitor {
             Some(rooms) => rooms
                 .iter()
                 .map(|x| x.room_id())
-                .collect::<Vec<_>>()
-                .contains(&room.room_id()),
+                .any(|x| x == room.room_id()),
         };
         if !want_download {
             return Ok(());

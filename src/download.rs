@@ -26,7 +26,7 @@ pub enum Error {
     ConfigError(#[from] config::Error),
 
     #[error(transparent)]
-    RumaError(#[from] matrix_sdk::Error),
+    MatrixSdkError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
     MatrixUriParseError(#[from] MatrixUriParseError),

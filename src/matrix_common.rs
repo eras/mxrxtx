@@ -13,7 +13,7 @@ use log::{debug, error, info, warn};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    RumaError(#[from] matrix_sdk::Error),
+    MatrixSdkError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
     MatrixHttpError(#[from] matrix_sdk::HttpError),

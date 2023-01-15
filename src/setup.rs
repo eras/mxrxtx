@@ -28,7 +28,7 @@ pub enum Error {
     SetupError(String),
 
     #[error(transparent)]
-    RumaError(#[from] matrix_sdk::Error),
+    MatrixSdkError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
     MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
