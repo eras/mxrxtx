@@ -3,11 +3,20 @@ use crate::{
     utils::{escape, escape_paths},
 };
 use directories_next::ProjectDirs;
-use matrix_sdk::ruma::OwnedDeviceId;
+use matrix_sdk::ruma::api::client::session::{
+    get_login_types::v3::{IdentityProvider, LoginType},
+    login::v3::Response as LoginResponse,
+};
+use matrix_sdk::ruma::{OwnedDeviceId, OwnedUserId};
 use matrix_sdk::Client;
+use rand::distributions::{Alphanumeric, DistString};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -32,6 +41,9 @@ pub enum Error {
     MatrixSdkError(#[from] matrix_sdk::Error),
 
     #[error(transparent)]
+    MatrixSdkHttpError(#[from] matrix_sdk::HttpError),
+
+    #[error(transparent)]
     MatrixClientbuildError(#[from] matrix_sdk::ClientBuildError),
 
     #[error(transparent)]
@@ -39,6 +51,15 @@ pub enum Error {
 
     #[error("Failure to process path: {}", .0)]
     UnsupportedPath(String),
+
+    #[error("No login methods available")]
+    NoLoginMethodsAvailable,
+
+    #[error("Unsupported login method")]
+    UnsupportedLoginMethod,
+
+    #[error("No identity provider available")]
+    NoIdentityProvidersAvailable,
 
     #[error(transparent)]
     ConsoleError(#[from] console::Error),
@@ -48,6 +69,12 @@ pub enum Error {
 
     #[error(transparent)]
     MatrixCommonError(#[from] matrix_common::Error),
+
+    #[error(transparent)]
+    ParseIntError(#[from] std::num::ParseIntError),
+
+    #[error(transparent)]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 fn project_dir() -> Option<ProjectDirs> {
@@ -194,16 +221,136 @@ async fn prompt_log_room(config: &config::Config) -> Result<Option<String>, Erro
     }
 }
 
+pub async fn prompt_flow(flows: &[LoginType]) -> Result<LoginType, Error> {
+    console::print("The following login flows are available:\n").await?;
+    for (index, flow) in flows.iter().enumerate() {
+        console::print(&format!("  {index}: {flow:?}\n", index = index + 1)).await?;
+    }
+    let selection: usize = console::prompt("Select a flow by its number:")
+        .await?
+        .parse()?;
+    if selection >= 1 && selection <= flows.len() {
+        Ok(flows[selection - 1].clone())
+    } else {
+        Err(Error::NoLoginMethodsAvailable)
+    }
+}
+
+pub async fn prompt_identity_provider(
+    providers: &[IdentityProvider],
+) -> Result<IdentityProvider, Error> {
+    console::print("The following identity providers are available:\n").await?;
+    for (index, flow) in providers.iter().enumerate() {
+        console::print(&format!("  {index}: {flow:?}\n", index = index + 1)).await?;
+    }
+    let selection: usize = console::prompt("Select a provider by its number:")
+        .await?
+        .parse()?;
+    if selection >= 1 && selection <= providers.len() {
+        Ok(providers[selection - 1].clone())
+    } else {
+        Err(Error::NoIdentityProvidersAvailable)
+    }
+}
+
+pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginResponse, Error> {
+    let device_name = prompt_device_name().await?;
+    let device_id = prompt_device_id().await?;
+
+    let methods = client.get_login_types().await?;
+    let login_flow: LoginType = match &methods
+        .flows
+        .iter()
+        .filter(|login_type| matches!(login_type, LoginType::Password(_) | LoginType::Sso(_)))
+        .cloned()
+        .collect::<Vec<_>>()[..]
+    {
+        [] => {
+            error!("Homeserver provided no login types; cannot setup");
+            return Err(Error::NoLoginMethodsAvailable);
+        }
+        [flow] => flow.clone(),
+        flows @ [_, _, ..] => prompt_flow(flows).await?,
+    };
+    let login = match login_flow {
+        LoginType::Password(_) => {
+            let password = prompt_password().await?;
+            info!("Logging in");
+            client.login_username(user_id.localpart(), &password)
+        }
+        LoginType::Sso(_sso) => {
+            // TODO: actually use Some(provider_id) once the quoting bug issue is fixed:
+            // https://github.com/ruma/ruma/issues/1447
+            // let provider_id = (match &sso.identity_providers[..] {
+            //     [] => {
+            //         error!("Homeserver provided no login types; cannot setup");
+            //         return Err(Error::NoIdentityProvidersAvailable);
+            //     }
+            //     [provider] => provider.clone(),
+            //     providers @ [_, _, ..] => prompt_identity_provider(providers).await?,
+            // })
+            // .id;
+            use warp::Filter;
+            let (response_send, mut response_recv) = mpsc::channel(1);
+            let response_send = Arc::new(Mutex::new(response_send));
+            let prefix = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
+
+            // http://127.0.0.1:46005/?loginToken=token
+            let routes = warp::get()
+                .and(warp::path(prefix.clone()))
+                .and(warp::query::<HashMap<String, String>>())
+                //.and_then(diipadaipa);
+                .and_then(move |query: HashMap<String, String>| {
+                    let response_send = response_send.clone();
+                    let login_token = query.get("loginToken").cloned();
+                    async move {
+                        if let Some(login_token) = login_token {
+                            // TODO: handle errors properly
+                            response_send.lock().await.send(login_token).await.unwrap();
+                        }
+                        Ok::<_, std::convert::Infallible>(
+                            "You may now proceed with the setup.".to_string(),
+                        )
+                    }
+                });
+            let (addr, warp) = warp::serve(routes).bind_ephemeral(([127, 0, 0, 1], 0));
+            let warp_join = tokio::spawn(warp);
+            let url = format!("http://{addr}/{prefix}");
+            info!("Started SSO response server at {url}");
+            let url = client.get_sso_login_url(&url, None).await?;
+            console::print(&format!(
+                "\nPlease visit\n\n  {url}\n\n\
+		 Note that your browser (or extension like NoScript) may prevent you from\n\
+                 landing to the web server running locally for this authentication, in\n\
+		 which case you may need to copy&paste the link from the final login\n\
+		 button to your browser URL field.\n"
+            ))
+            .await?;
+            // TODO: handle errors properly
+            let token = response_recv.recv().await.unwrap();
+            info!("Received token! Logging in.");
+            drop(warp_join);
+            client.login_token(&token)
+        }
+        _ => return Err(Error::UnsupportedLoginMethod),
+    };
+
+    let login = login.initial_device_display_name(&device_name);
+    let login = match &device_id {
+        Some(device_id) => login.device_id(device_id),
+        None => login,
+    };
+    let login = login.send().await?;
+
+    Ok(login)
+}
+
 pub async fn setup_mode(
     _args: clap::ArgMatches,
     mut config: config::Config,
     config_file: &str,
 ) -> Result<(), Error> {
-    let mxid = console::prompt("Matrix id (e.g. @user:example.org): ").await?;
-
-    let device_name = prompt_device_name().await?;
-    let device_id = prompt_device_id().await?;
-    let password = prompt_password().await?;
+    let mxid = console::prompt("Matrix id (e.g. @user:example.org):").await?;
 
     let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
@@ -212,15 +359,7 @@ pub async fn setup_mode(
         .build()
         .await?;
 
-    info!("Logging in");
-    let login = client
-        .login_username(user_id.localpart(), &password)
-        .initial_device_display_name(&device_name);
-    let login = match &device_id {
-        Some(device_id) => login.device_id(device_id),
-        None => login,
-    };
-    let login = login.send().await?;
+    let login = make_login(&client, &user_id).await?;
     let device_id = login.device_id.clone();
 
     let state_dir = prompt_state_dir(&device_id).await?;
