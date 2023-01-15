@@ -104,21 +104,19 @@ pub async fn setup_mode(
     mut config: config::Config,
     config_file: &str,
 ) -> Result<(), Error> {
-    let mxid = {
-        console::print("Matrix id (e.g. @user:example.org): ").await?;
-        console::read_line().await?.ok_or(Error::NoInputError)?
-    };
+    let mxid = console::prompt("Matrix id (e.g. @user:example.org): ").await?;
 
-    console::print("Device display name (empty to use default device name \"mxrxtx\"): ").await?;
-    let device_name = console::read_line().await?.ok_or(Error::NoInputError)?;
+    let device_name =
+        console::prompt("Device display name (empty to use default device name \"mxrxtx\"):")
+            .await?;
     let device_name = if device_name.is_empty() {
         "mxrxtx".to_string()
     } else {
         device_name
     };
 
-    console::print("Device id (empty to use default automatically generated id): ").await?;
-    let device_id = console::read_line().await?.ok_or(Error::NoInputError)?;
+    let device_id =
+        console::prompt("Device id (empty to use default automatically generated id):").await?;
     let device_id = if device_id.is_empty() {
         None
     } else {
@@ -126,7 +124,7 @@ pub async fn setup_mode(
     };
 
     console::print("Password: ").await?;
-    let password = console::read_passwd().await?.ok_or(Error::NoInputError)?;
+    let password = console::read_passwd().await?;
     console::print("\n").await?;
     let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
@@ -153,12 +151,11 @@ pub async fn setup_mode(
             path
         })
         .unwrap_or_else(|| Path::new(&escape_paths(device_id.as_ref())).to_path_buf());
-    console::print(&format!(
-        "State directory (empty to use default state directory \"{}\"): ",
+    let state_dir = console::prompt(&format!(
+        "State directory (empty to use default state directory \"{}\"):",
         escape(&default_state_dir.to_string_lossy())
     ))
     .await?;
-    let state_dir = console::read_line().await?.ok_or(Error::NoInputError)?;
     if let Some(parent) = Path::new(&state_dir).parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -169,10 +166,9 @@ pub async fn setup_mode(
     };
 
     let default_ice_servers = DEFAULT_ICE_SERVERS.join(", ");
-    console::print(&format!(
-                    "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers): "
+    let ice_servers = console::prompt(&format!(
+                    "List stun/turn servers in a comma separated list (empty to use {default_ice_servers}; use - for no stun/turn servers):"
 	    )).await?;
-    let ice_servers = console::read_line().await?.ok_or(Error::NoInputError)?;
     let ice_servers = if ice_servers.is_empty() {
         default_ice_servers
     } else if &ice_servers == "-" {
@@ -198,11 +194,10 @@ pub async fn setup_mode(
         escape(config_file)
     );
 
-    console::print(
-        "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none? ",
+    let log_room = console::prompt(
+        "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none?",
     )
     .await?;
-    let log_room = console::read_line().await?.ok_or(Error::NoInputError)?;
     drop(client);
     if !log_room.is_empty() {
         // create a new client with loaded data and state
