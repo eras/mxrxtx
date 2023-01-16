@@ -350,6 +350,12 @@ pub async fn setup_mode(
     mut config: config::Config,
     config_file: &str,
 ) -> Result<(), Error> {
+    if std::path::Path::new(config_file).exists() {
+        return Err(Error::SetupError(format!(
+            "Config file {config_file} already exists, not running setup.\n"
+        )));
+    }
+
     let mxid = console::prompt("Matrix id (e.g. @user:example.org):").await?;
 
     let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
