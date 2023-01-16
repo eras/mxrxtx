@@ -5,6 +5,7 @@ use matrix_sdk::ruma::OwnedDeviceId;
 use matrix_sdk::sync::SyncResponse;
 use matrix_sdk::{room::Joined, Client};
 use std::convert::TryFrom;
+use std::time::Duration;
 use thiserror::Error;
 
 #[allow(unused_imports)]
@@ -169,6 +170,7 @@ pub async fn init(
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
+        .timeout(Duration::from_secs(120)) // account for slow homeservers..
         // .filter(just_joined_rooms_filter())
         // .full_state(true);
 	;
