@@ -56,19 +56,6 @@ weed out those hackers from the homeserver..
 - Protocol is not final at all
 - My todo list for `mxrxtx` has 100+ entries
 
-## Theory of operation
-
-- Client A sends a custom message to a room describing which files it wants to offer and some metadata about them
-- Client B is informed about the URI for this event and retrieves the contents of the event
-- Client B sends a custom ToDevice message to A to start the WebRTC handshake (ice servers may be consulted)
-- Client A responds to client B to continue the WebRTC handshake
-- Clients A and B have now formed a WebRTC datachannel connection
-- Client A starts sending the contents of the offer from start to end (no framing so far)
-- Client B received the contents and writes them to a file
-- Once Client B has received the final byte it sends "ok" to A and terminates
-- Client A reads two bytes from B and the session A-B is finished; other concurrent or future sessions may continue
-- Client A is finally explicitly terminated
-
 # Usage
 ## Setting up
 Run the initial setup with `mxrxtx setup`. You may provide an alternative config file with
@@ -101,3 +88,17 @@ consider new events synced after starting the tool.
 # FAQ
 ## How to spell the name?
 It should be spelled as follows: _äm äx är äx tee äx_.
+## How does it work?
+
+Theory operation is as follows:
+
+- Client A sends a custom message to a room describing which files it wants to offer and some metadata about them
+- Client B is informed about the URI for this event and retrieves the contents of the event
+- Client B sends a custom ToDevice message to A to start the WebRTC handshake (ice servers may be consulted)
+- Client A responds to client B to continue the WebRTC handshake
+- Clients A and B have now formed a WebRTC datachannel connection
+- Client A starts sending the contents of the offer from start to end (no framing so far)
+- Client B received the contents and writes them to a file
+- Once Client B has received the final byte it sends "ok" to A and terminates
+- Client A reads two bytes from B and the session A-B is finished; other concurrent or future sessions may continue
+- Client A is finally explicitly terminated
