@@ -22,4 +22,4 @@ cargo clippy
 cargo test
 # the change may have already done, so this can be skipped
 git commit -m "Bumped version to $version" Cargo.toml Cargo.lock || true
-git tag --force --annotate --cleanup=whitespace --edit --message '' "$version"
+git tag --force --annotate --cleanup=whitespace --edit --message "$version" "$version"
