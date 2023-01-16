@@ -61,29 +61,37 @@ async fn main() -> Result<(), Error> {
                 .default_value(".")
                 .help("Directory to use for downloading, defaults to ."),
         )
-        .subcommand(clap::Command::new("setup").help(
-            "Do setup (prompt matrix homeserver address, user account, password, setup e2ee)",
-        ))
         .subcommand(
-            clap::Command::new("verify")
-                .help("Run emoji verification (start verification from another session)"),
-        )
-        .subcommand(
-            clap::Command::new("download").arg(
-                clap::Arg::new("url")
-                    .index(1)
-                    .required(true)
-                    .value_name("URL")
-                    .multiple_values(false)
-                    .min_values(1)
-                    .help(
-                        "Download files offered by a given Matrix event, given as a matrix: \
-			  or https://matrix.to url",
-                    ),
+            clap::Command::new("setup")
+                .about("Run the initial setup")
+                .help(
+                "Do setup (prompt matrix homeserver address, user account, password, setup e2ee)",
             ),
         )
         .subcommand(
+            clap::Command::new("verify")
+                .about("Run the emoji verification")
+                .help("Run the emoji verification (start verification from another session)"),
+        )
+        .subcommand(
+            clap::Command::new("download")
+                .about("Download an offer for which you know the event id")
+                .arg(
+                    clap::Arg::new("url")
+                        .index(1)
+                        .required(true)
+                        .value_name("URL")
+                        .multiple_values(false)
+                        .min_values(1)
+                        .help(
+                            "Download files offered by a given Matrix event, given as a matrix: \
+			  or https://matrix.to url",
+                        ),
+                ),
+        )
+        .subcommand(
             clap::Command::new("offer")
+                .about("Offer files to be downloaded in a room")
                 .arg(
                     clap::Arg::new("room")
                         .index(1)
@@ -105,19 +113,21 @@ async fn main() -> Result<(), Error> {
                 ),
         )
         .subcommand(
-            clap::Command::new("monitor").arg(
-                clap::Arg::new("rooms")
-                    .multiple_values(true)
-                    .index(1)
-                    .required(false)
-                    .value_name("ROOM")
-                    .min_values(0)
-                    .index(1)
-                    .help(
-                        "Monitor listed rooms for offers and download them when they appear; \
+            clap::Command::new("monitor")
+                .about("Monitor listed rooms or all rooms for new offers and download them")
+                .arg(
+                    clap::Arg::new("rooms")
+                        .multiple_values(true)
+                        .index(1)
+                        .required(false)
+                        .value_name("ROOM")
+                        .min_values(0)
+                        .index(1)
+                        .help(
+                            "Monitor listed rooms for offers and download them when they appear; \
 			  if no rooms listed, monitor all.",
-                    ),
-            ),
+                        ),
+                ),
         )
         .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"))
         .get_matches();
