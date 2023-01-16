@@ -204,14 +204,8 @@ async fn prompt_log_room(config: &config::Config) -> Result<Option<String>, Erro
     )
     .await?;
     if !log_room.is_empty() {
-        // create a new client with loaded data and state
-        let session = config.get_matrix_session()?;
-        let user_id = <&matrix_sdk::ruma::UserId>::try_from(config.user_id.as_str())?.to_owned();
-        let client = Client::builder()
-            .server_name(user_id.server_name())
-            .build()
-            .await?;
-        client.restore_session(session).await?;
+        let (client, _device_id, _first_sync_response, _matrix_log) =
+            matrix_common::init(config).await?;
 
         let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
 
