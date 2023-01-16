@@ -66,3 +66,7 @@ directory.
 To download any offered files, you can use `mxrxtx
 monitor`. (`--output-dir` is advisable here as well.) It will only
 consider new events synced after starting the tool.
+
+# FAQ
+## How to spell the name?
+It should be spelled as follows: _äm äx är äx tee äx_.
