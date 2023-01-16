@@ -87,7 +87,7 @@ consider new events synced after starting the tool.
 
 # FAQ
 ## How to spell the name?
-It should be spelled as follows: _äm äx är äx tee äx_.
+It should be spelled as follows: _äm äks är äks tee äks_.
 ## How does it work?
 
 Theory operation is as follows:
