@@ -1,5 +1,5 @@
 use mxrxtx::{config, download, matrix_verify, monitor, offer, setup, version::get_version};
-
+use std::io::Write;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -126,6 +126,15 @@ async fn main() -> Result<(), Error> {
         tracing_subscriber::fmt::init();
     } else {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=info"))
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{} {:<5} {}",
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                    record.level(),
+                    record.args()
+                )
+            })
             .init();
     }
 
