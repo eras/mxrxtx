@@ -57,6 +57,19 @@ weed out those hackers from the homeserver..
 - My todo list for `mxrxtx` has 100+ entries
 
 # Usage
+## Install
+
+Binaries for Ubuntu Windows are available in the [GitHub releases
+page](../../releases/latest/). Download a binary, extract it and run
+it from a terminal.
+
+You may also use Cargo to install it from the sources:
+
+`cargo install --git https://github.com/eras/mxrxtx`
+
+If you don't have Rust and Cargo set up, you can use
+[rustup](https://rustup.rs/) to set it with ease.
+
 ## Setting up
 Run the initial setup with `mxrxtx setup`. You may provide an alternative config file with
 `--config`; otherwise config file location relevant to your system is
