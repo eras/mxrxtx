@@ -54,6 +54,7 @@ weed out those hackers from the homeserver..
 - Offers consisting of only zero-byte files probably won't work..
 - Mac build, if enabled on CI, would crash during the unit tests
 - Protocol is not final at all
+- Does not use [MSC1767 extensible events](https://github.com/matrix-org/matrix-spec-proposals/pull/1767) yet
 - My todo list for `mxrxtx` has 100+ entries
 
 # Usage
@@ -85,7 +86,17 @@ id and the client needs to be present in that room. The command
 outputs the matrix.to URL for the shared files, which is shared as a
 single collection.
 
-The offer is withdrawn when `mxrxtx` exits.
+Because few clients are able to show the events, you may choose to
+copy paste that URL to a room. Most notably to see these events in
+[Element](https://element.io/), you need to have "Show hidden events
+in timeline" enabled from the developer settings, which you can access
+via the `/devtools` commands—and even then you need to click the event
+open to see its contents (situation does not seem better even with
+[MSC1767 extensible
+events](https://github.com/matrix-org/matrix-spec-proposals/pull/1767)
+support enabled even if `mxrxtx` did support them).
+
+The offer is redacted when `mxrxtx` exits.
 ## Download a file
 You can download a file with `mxrxtx download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-URLs.
 
