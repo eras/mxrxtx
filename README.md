@@ -38,6 +38,37 @@ emojis it gets to show__: if you notice any discrepancy here while
 doing the verification, you should remove the state store and maybe
 weed out those hackers from the homeserver..
 
+## Features
+
+- Available for Linux and Windows
+- Setup mode easy configuration; supports single signon
+- Offer can contain multiple files and directories
+- Supports E2EE and emoji cross-signing verification
+- Monitor mode for downloading all received offers
+- The offered content can be downloaded many times, and concurrently by multiple clients
+- Supports a room to send log data to (relevant in particular to monitor mode)
+- Redacts offers when offering client terminates
+
+## Known issues
+
+- Offers consisting of only zero-byte files probably won't work..
+- Mac build, if enabled on CI, would crash during the unit tests
+- Protocol is not final at all
+- My todo list for `mxrxtx` has 100+ entries
+
+## Theory of operation
+
+- Client A sends a custom message to a room describing which files it wants to offer and some metadata about them
+- Client B is informed about the URI for this event and retrieves the contents of the event
+- Client B sends a custom ToDevice message to A to start the WebRTC handshake (ice servers may be consulted)
+- Client A responds to client B to continue the WebRTC handshake
+- Clients A and B have now formed a WebRTC datachannel connection
+- Client A starts sending the contents of the offer from start to end (no framing so far)
+- Client B received the contents and writes them to a file
+- Once Client B has received the final byte it sends "ok" to A and terminates
+- Client A reads two bytes from B and the session A-B is finished; other concurrent or future sessions may continue
+- Client A is finally explicitly terminated
+
 # Usage
 ## Setting up
 Run the initial setup with `mxrxtx setup`. You may provide an alternative config file with
