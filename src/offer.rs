@@ -123,7 +123,12 @@ pub async fn accepter(
 
 #[rustfmt::skip::macros(select)]
 pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
-    let (client, device_id, matrix_log) = matrix_common::init(&config).await?;
+    let matrix_common::MatrixInit {
+        client,
+        device_id,
+        matrix_log,
+        ..
+    } = matrix_common::init(&config).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);

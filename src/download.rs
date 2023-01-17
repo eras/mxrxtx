@@ -201,7 +201,9 @@ pub async fn download(
     urls: Vec<&str>,
     output_dir: &str,
 ) -> Result<(), Error> {
-    let (client, device_id, _matrix_log) = matrix_common::init(&config).await?;
+    let matrix_common::MatrixInit {
+        client, device_id, ..
+    } = matrix_common::init(&config).await?;
 
     info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;

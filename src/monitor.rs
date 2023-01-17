@@ -183,7 +183,12 @@ pub async fn monitor(
     output_dir: &str,
     rooms: Option<Vec<String>>,
 ) -> Result<(), Error> {
-    let (client, device_id, matrix_log) = matrix_common::init(&config).await?;
+    let matrix_common::MatrixInit {
+        client,
+        device_id,
+        matrix_log,
+        ..
+    } = matrix_common::init(&config).await?;
 
     matrix_log.log("Starting monitor").await?;
 

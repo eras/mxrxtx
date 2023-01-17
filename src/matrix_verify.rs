@@ -220,7 +220,9 @@ pub async fn add_event_handlers(
 
 #[rustfmt::skip::macros(select)]
 pub async fn verify(config: config::Config) -> Result<(), Error> {
-    let (client, _device_id, matrix_log) = matrix_common::init(&config).await?;
+    let matrix_common::MatrixInit {
+        client, matrix_log, ..
+    } = matrix_common::init(&config).await?;
 
     let (result_send, mut result_receive) = mpsc::unbounded_channel();
     add_event_handlers(client.clone(), result_send).await?;

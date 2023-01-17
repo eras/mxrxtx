@@ -179,9 +179,13 @@ pub async fn sync_once_with_token(
     Ok(receive.recv().await.unwrap()?)
 }
 
-pub async fn init(
-    config: &config::Config,
-) -> Result<(Client, OwnedDeviceId, matrix_log::MatrixLog), Error> {
+pub struct MatrixInit {
+    pub client: Client,
+    pub device_id: OwnedDeviceId,
+    pub matrix_log: matrix_log::MatrixLog,
+}
+
+pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
@@ -203,5 +207,9 @@ pub async fn init(
 
     let matrix_log = matrix_log::MatrixLog::new(&client, config).await?;
 
-    Ok((client, device_id, matrix_log))
+    Ok(MatrixInit {
+        client,
+        device_id,
+        matrix_log,
+    })
 }
