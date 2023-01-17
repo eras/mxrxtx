@@ -199,7 +199,7 @@ pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
         .build()
         .await?;
     let device_id = session.device_id.clone();
-    info!("Logging in");
+    info!("Restoring session");
     client.restore_session(session).await?;
 
     info!("Sync");
