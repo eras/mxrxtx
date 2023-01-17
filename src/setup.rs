@@ -345,7 +345,7 @@ pub async fn setup_mode(
 ) -> Result<(), Error> {
     if std::path::Path::new(config_file).exists() {
         return Err(Error::SetupError(format!(
-            "Config file {config_file} already exists, not running setup.\n"
+            "Config file {config_file} already exists, not running setup."
         )));
     }
 
