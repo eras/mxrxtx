@@ -182,10 +182,7 @@ async fn main() -> Result<(), Error> {
             let files_args: Vec<String> = offer_args
                 .values_of_t("files")
                 .expect("clap arguments should ensure this");
-            let files: Vec<&str> = files_args[1..files_args.len()]
-                .iter()
-                .map(|x| x.as_str())
-                .collect();
+            let files: Vec<&str> = files_args.iter().map(|x| x.as_str()).collect();
             offer::offer(config, room, files).await?;
         }
         _ => {
