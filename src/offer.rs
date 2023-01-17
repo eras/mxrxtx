@@ -138,8 +138,11 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         .map(|file| {
             fs::metadata(Path::new(&file)).map(|metadata| protocol::File {
                 name: file.to_string(),
-                content_type: String::from("application/octet-stream"),
+                mimetype: String::from("application/octet-stream"),
                 size: metadata.len(), // TODO: respect this when sending file
+                thumbnail_file: None,
+                thumbnail_info: None,
+                thumbnail_url: None,
             })
         })
         .try_fold(Vec::new(), |mut acc: Vec<protocol::File>, file_result| {
@@ -147,7 +150,13 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
             Result::<_, Error>::Ok(acc)
         })?;
 
-    let offer = protocol::OfferContent { files: offer_files };
+    let offer = protocol::OfferContent {
+        name: None,
+        description: None,
+        files: offer_files,
+        thumbnail_info: None,
+        thumbnail_url: None,
+    };
 
     let event_id = room
         .send(offer, Some(&matrix_sdk::ruma::TransactionId::new()))

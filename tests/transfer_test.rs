@@ -51,8 +51,10 @@ async fn transfer_file() {
     let mut offer_content = protocol::OfferContent::default();
     offer_content.files.push(protocol::File {
         name: String::from("test-file.1"),
-        content_type: String::from("application/octet-stream"),
+        mimetype: String::from("application/octet-stream"),
         size: 10,
+        thumbnail_info: None,
+        thumbnail_url: None,
     });
     let offer_tmp_dir = Arc::new(Mutex::new(Some(
         TempDir::new("mxrxtx-transfer_tests-offer").unwrap(),

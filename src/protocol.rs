@@ -1,4 +1,5 @@
 use matrix_sdk::ruma::events::macros::EventContent;
+use matrix_sdk::ruma::events::room::{EncryptedFile, ThumbnailInfo};
 use matrix_sdk::ruma::{OwnedDeviceId, OwnedEventId};
 use serde_derive::{Deserialize, Serialize};
 
@@ -24,12 +25,35 @@ pub struct ToDeviceWebRtcContent {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct File {
     pub name: String,
-    pub content_type: String,
+
+    pub mimetype: String,
+
     pub size: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_file: Option<EncryptedFile>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_info: Option<ThumbnailInfo>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent, Default, Clone)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.offer", kind = MessageLike)]
 pub struct OfferContent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
     pub files: Vec<File>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_info: Option<ThumbnailInfo>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_url: Option<String>,
 }
