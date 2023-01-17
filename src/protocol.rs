@@ -13,11 +13,11 @@ pub struct ToDeviceWebRtcContent {
     // unique id identifying this webrtc handshake
     pub id: Uuid,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     // device id of the client sending this event; needed only on first contact
     pub device_id: Option<OwnedDeviceId>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     // the event holding the OfferContent relevant to this session; needed only on first contact
     pub event_id: Option<OwnedEventId>,
 
@@ -32,31 +32,33 @@ pub struct File {
 
     pub size: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_file: Option<EncryptedFile>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_info: Option<ThumbnailInfo>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
+
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub hashes: BTreeMap<String, Base64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent, Default, Clone)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.offer", kind = MessageLike)]
 pub struct OfferContent {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
     pub files: Vec<File>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_info: Option<ThumbnailInfo>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
 }
