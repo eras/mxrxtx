@@ -36,8 +36,10 @@ handshake is vulnerable to a Man-in-the-Middle attack__, at least
 messages](https://github.com/matrix-org/matrix-rust-sdk/issues/814),
 the offer is modified to provide some sort of signing data, or we make
 use of some other encryption material available to the Client object
-to establish peer identity over the WebRTC connection. The data itself
-is vulnerable because we don't have a checksum for the data available.
+to establish peer identity over the WebRTC connection. The metadata
+and the data are safe (but not confidential) because the file data and
+their SHA512 is shared in the original message encrypted, __but only
+if__ the message was shared in an encrypted room.
 
 You may do the emoji verification at the end of the `setup`, or
 separately with the `verify` sub-command. (Verification is not

@@ -1,7 +1,9 @@
 use matrix_sdk::ruma::events::macros::EventContent;
 use matrix_sdk::ruma::events::room::{EncryptedFile, ThumbnailInfo};
+use matrix_sdk::ruma::serde::Base64;
 use matrix_sdk::ruma::{OwnedDeviceId, OwnedEventId};
 use serde_derive::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub type Uuid = uuid::Uuid;
 
@@ -38,6 +40,7 @@ pub struct File {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail_url: Option<String>,
+    pub hashes: BTreeMap<String, Base64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EventContent, Default, Clone)]

@@ -55,6 +55,8 @@ async fn transfer_file() {
         size: 10,
         thumbnail_info: None,
         thumbnail_url: None,
+        thumbnail_file: None,
+        hashes: Default::default(),
     });
     let offer_tmp_dir = Arc::new(Mutex::new(Some(
         TempDir::new("mxrxtx-transfer_tests-offer").unwrap(),
@@ -64,27 +66,26 @@ async fn transfer_file() {
     )));
     let signaling = TestSignalingRouter::new();
     let offer_task = tokio::spawn({
-        let offer_content = offer_content.clone();
+        let mut offer_content = offer_content.clone();
         let offer_tmp_dir = offer_tmp_dir.clone();
         let mut signaling = signaling.clone();
         async move {
             let mut transport =
                 Transport::new(signaling.accept().await.unwrap(), vec![]).expect("weird");
-            let mut files = Vec::new();
-            for file in &offer_content.files {
+            for offer_file in &mut offer_content.files {
                 let offer_tmp_dir = offer_tmp_dir.lock().await;
                 let file_path = offer_tmp_dir
                     .as_ref()
                     .unwrap()
                     .path()
-                    .join(file.name.clone());
+                    .join(offer_file.name.clone());
                 let mut tmp_file = File::create(file_path.clone()).unwrap();
-                for _ in 0..file.size {
+                for _ in 0..offer_file.size {
                     tmp_file.write(b"b").unwrap();
                 }
-                files.push(file_path.to_path_buf());
+                offer_file.name = file_path.to_string_lossy().to_string();
             }
-            offer::transfer(files, transport.accept().await.unwrap())
+            offer::transfer(offer_content.files, transport.accept().await.unwrap())
                 .await
                 .map_err(anyhow::Error::from)
         }

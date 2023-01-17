@@ -7,6 +7,7 @@ use crate::{
 use futures::{AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::{OwnedEventId, OwnedRoomId};
+use sha2::{Digest, Sha512};
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -143,7 +144,21 @@ pub async fn transfer(
     let expected_bytes = files.iter().map(|x| x.size as usize).sum();
     let mut file_idx = 0usize;
     let mut file_offset = 0usize;
-    let mut cur_file = None;
+    let mut cur_file_hasher: Option<(File, Sha512)> = None;
+    let finalize_cur_file_hasher = |file_idx: usize, cur_file_hasher: Option<(File, Sha512)>| {
+        if let Some((_, hasher)) = cur_file_hasher {
+            if let Some(expected) = files[file_idx].hashes.get("sha512") {
+                let result = hasher.finalize();
+                if result.to_vec() != expected.as_bytes() {
+                    error!("Transferred file {file} had mismatching SHA512 {mismatch:x}, expected {expected}",
+                           file = escape(&files[file_idx].name),
+			   mismatch = &result,
+			   expected = hex::encode(expected.as_bytes()),
+                    );
+                }
+            }
+        }
+    };
     while !eof && file_idx < files.len() && total_bytes < expected_bytes {
         // todo: doesn't handle transferring single 0-byte file
         let mut n = match cn.read(&mut buffer).await {
@@ -162,22 +177,24 @@ pub async fn transfer(
         while n > 0 && file_idx < files.len() {
             let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
             if cur_bytes_remaining == 0 {
-                cur_file = None;
+                finalize_cur_file_hasher(file_idx, cur_file_hasher.take());
                 file_idx += 1;
                 file_offset = 0usize;
             } else {
                 let write_bytes = cmp::min(cur_bytes_remaining, n);
-                if cur_file.is_none() {
+                if cur_file_hasher.is_none() {
                     let mut path = PathBuf::from(&output_dir);
                     path.push(escape_paths(&files[file_idx].name));
                     info!("Downloading {:?}", escape(&path.to_string_lossy()));
                     let file = File::create(&path)?;
-                    cur_file = Some(file);
+                    let hasher = Sha512::new();
+                    cur_file_hasher = Some((file, hasher));
                 }
-                match &mut cur_file {
-                    Some(cur_file) => {
+                match &mut cur_file_hasher {
+                    Some((cur_file, hasher)) => {
                         cur_file
                             .write_all(&buffer[buffer_offset..(buffer_offset + write_bytes)])?;
+                        hasher.update(&buffer[buffer_offset..(buffer_offset + write_bytes)]);
                         buffer_offset += write_bytes;
                         file_offset += write_bytes;
                         n -= write_bytes;
@@ -186,6 +203,9 @@ pub async fn transfer(
                 }
             }
         }
+    }
+    if file_idx < files.len() {
+        finalize_cur_file_hasher(file_idx, cur_file_hasher.take());
     }
     debug!("Exiting loop");
     cn.write_all(b"ok").await?;

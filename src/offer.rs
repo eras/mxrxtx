@@ -1,13 +1,16 @@
 use crate::{
-    config, level_event::LevelEvent, matrix_common, matrix_log,
+    config, digest, level_event::LevelEvent, matrix_common, matrix_log,
     matrix_signaling::MatrixSignalingRouter, protocol, signaling::SignalingRouter, transport,
     utils::escape,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use matrix_sdk::config::SyncSettings;
+use sha2::{Digest, Sha512};
+use std::cmp;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use thiserror::Error;
 use tokio::select;
 
@@ -38,19 +41,44 @@ pub enum Error {
     MatrixLogError(#[from] matrix_log::Error),
 }
 
-pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Result<(), Error> {
+pub async fn transfer(
+    offer_files: Vec<protocol::File>,
+    mut cn: transport::DataStream,
+) -> Result<(), Error> {
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut total_bytes = 0;
-    for file in files {
-        let mut file = File::open(file)?;
+    for offer_file in offer_files {
+        let mut file = File::open(Path::new(&offer_file.name))?;
         let mut eof = false;
-        while !eof {
-            let n = file.read(&mut buffer)?;
-            if n > 0 {
-                cn.write_all(&buffer[0..n]).await?;
-                total_bytes += n;
-            } else {
+        let file_size = offer_file.size as usize;
+        let mut sent_file_bytes = 0usize;
+        let mut hasher = Sha512::new();
+        while !eof && sent_file_bytes < file_size {
+            let read_bytes = cmp::min(file_size - sent_file_bytes, buffer.len());
+            let n = file.read(&mut buffer[0..read_bytes])?;
+            if n == 0 {
                 eof = true;
+            } else {
+                cn.write_all(&buffer[0..n]).await?;
+                hasher.update(&buffer[0..n]);
+                total_bytes += n;
+                sent_file_bytes += n;
+            }
+        }
+        if sent_file_bytes < file_size {
+            error!(
+                "File {file} finished prematurely, aborting transfer",
+                file = escape(&offer_file.name)
+            );
+            break;
+        }
+        if let Some(hash) = offer_file.hashes.get("sha512") {
+            if hasher.finalize().to_vec() != hash.as_bytes() {
+                error!(
+                    "File {file} was changed during transfer (hash changed), aborting",
+                    file = escape(&offer_file.name)
+                );
+                break;
             }
         }
     }
@@ -62,7 +90,7 @@ pub async fn transfer(files: Vec<PathBuf>, mut cn: transport::DataStream) -> Res
 // https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
 pub fn accepter_recurse(
     exit_signal: LevelEvent,
-    files: Vec<PathBuf>,
+    offer_files: Vec<protocol::File>,
     signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
@@ -70,7 +98,7 @@ pub fn accepter_recurse(
     Box::pin(async move {
         accepter(
             exit_signal,
-            files,
+            offer_files,
             signaling_router,
             ice_servers.clone(),
             matrix_log,
@@ -82,7 +110,7 @@ pub fn accepter_recurse(
 
 pub async fn accepter(
     exit_signal: LevelEvent,
-    files: Vec<PathBuf>,
+    offer_files: Vec<protocol::File>,
     mut signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
@@ -92,12 +120,12 @@ pub async fn accepter(
     tokio::spawn({
         let ice_servers = ice_servers.clone();
         let exit_signal = exit_signal.clone();
-        let files = files.clone();
+        let offer_files = offer_files.clone();
         let matrix_log = matrix_log.clone();
         async move {
             accepter_recurse(
                 exit_signal,
-                files,
+                offer_files,
                 signaling_router,
                 ice_servers,
                 matrix_log,
@@ -112,7 +140,7 @@ pub async fn accepter(
     matrix_log
         .log("Accepted a connection, transferring file")
         .await?;
-    transfer(files, cn).await?;
+    transfer(offer_files, cn).await?;
     matrix_log.log("Transferring complete").await?;
     // debug!("Received ack, stopping");
     // transport.stop().await?;
@@ -122,7 +150,11 @@ pub async fn accepter(
 }
 
 #[rustfmt::skip::macros(select)]
-pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
+pub async fn offer(
+    config: config::Config,
+    room: &str,
+    offer_files: Vec<&str>,
+) -> Result<(), Error> {
     let matrix_common::MatrixInit {
         client,
         device_id,
@@ -133,16 +165,22 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
 
-    let offer_files: Vec<protocol::File> = files
+    let offer_files: Vec<protocol::File> = offer_files
         .iter()
         .map(|file| {
-            fs::metadata(Path::new(&file)).map(|metadata| protocol::File {
+            let (sha512, size) = digest::file_sha512(Path::new(&file));
+            let mut hashes = BTreeMap::new();
+            hashes.insert("sha512".to_string(), sha512);
+            debug!("moi");
+            fs::metadata(Path::new(&file)).map(|_metadata| protocol::File {
+                // we need to get date later so let's not drop this metadata thing yet..
                 name: file.to_string(),
                 mimetype: String::from("application/octet-stream"),
-                size: metadata.len(), // TODO: respect this when sending file
+                size, // TODO: respect this when sending file
                 thumbnail_file: None,
                 thumbnail_info: None,
                 thumbnail_url: None,
+                hashes,
             })
         })
         .try_fold(Vec::new(), |mut acc: Vec<protocol::File>, file_result| {
@@ -153,7 +191,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
     let offer = protocol::OfferContent {
         name: None,
         description: None,
-        files: offer_files,
+        files: offer_files.clone(),
         thumbnail_info: None,
         thumbnail_url: None,
     };
@@ -201,16 +239,12 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         MatrixSignalingRouter::new(client.clone(), device_id, event_id.clone()).await;
 
     tokio::spawn({
-        let files: Vec<PathBuf> = files
-            .into_iter()
-            .map(|file| Path::new(file).to_path_buf())
-            .collect();
         let exit_signal = exit_signal.clone();
         let matrix_log = matrix_log.clone();
         async move {
             accepter(
                 exit_signal,
-                files,
+                offer_files,
                 signaling_router,
                 config.ice_servers,
                 matrix_log,
