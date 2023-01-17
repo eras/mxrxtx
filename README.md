@@ -30,13 +30,21 @@ The intent of this tool is to work as a prototype for eventually
 specifying _solid_ WebRTC file transfer functionality for the Matrix
 spec.
 
-`mxrxtx` supports end-to-end encryption. You may do the emoji
-verification at the end of the `setup`, or separately with the
-`verify` sub-command. (Verification is not possible in other modes of
-operation.) __Note that `mxrxtx` will automatically accept whichever
-emojis it gets to show__: if you notice any discrepancy here while
-doing the verification, you should remove the state store and maybe
-weed out those hackers from the homeserver..
+`mxrxtx` supports end-to-end encryption, __however the WebRTC
+handshake is vulnerable to a Man-in-the-Middle attack__, at least
+[until Matrix Rust SDK is able to send encrypted ToDevice
+messages](https://github.com/matrix-org/matrix-rust-sdk/issues/814),
+the offer is modified to provide some sort of signing data, or we make
+use of some other encryption material available to the Client object
+to establish peer identity over the WebRTC connection. The data itself
+is vulnerable because we don't have a checksum for the data available.
+
+You may do the emoji verification at the end of the `setup`, or
+separately with the `verify` sub-command. (Verification is not
+possible in other modes of operation.) __Note that `mxrxtx` will
+automatically accept whichever emojis it gets to show__: if you notice
+any discrepancy here while doing the verification, you should remove
+the state store and maybe weed out those hackers from the homeserver..
 
 ## Features
 
