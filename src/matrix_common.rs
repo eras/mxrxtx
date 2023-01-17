@@ -3,10 +3,11 @@ use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
 use matrix_sdk::ruma::OwnedDeviceId;
 use matrix_sdk::sync::SyncResponse;
-use matrix_sdk::{room::Joined, Client};
+use matrix_sdk::{room::Joined, Client, LoopCtrl};
 use std::convert::TryFrom;
 use std::time::Duration;
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -164,9 +165,23 @@ pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Resu
     Ok(room)
 }
 
+pub async fn sync_once_with_token(
+    client: &Client,
+    sync_settings: SyncSettings,
+) -> Result<SyncResponse, Error> {
+    let (send, mut receive) = mpsc::unbounded_channel();
+    client
+        .sync_with_result_callback(sync_settings, |response| async {
+            send.send(response).unwrap();
+            Ok(LoopCtrl::Break)
+        })
+        .await?;
+    Ok(receive.recv().await.unwrap()?)
+}
+
 pub async fn init(
     config: &config::Config,
-) -> Result<(Client, OwnedDeviceId, SyncResponse, matrix_log::MatrixLog), Error> {
+) -> Result<(Client, OwnedDeviceId, matrix_log::MatrixLog), Error> {
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
@@ -184,9 +199,9 @@ pub async fn init(
     client.restore_session(session).await?;
 
     info!("Sync");
-    let sync_response = client.sync_once(sync_settings).await?;
+    let _sync_response = sync_once_with_token(&client, sync_settings).await?;
 
     let matrix_log = matrix_log::MatrixLog::new(&client, config).await?;
 
-    Ok((client, device_id, sync_response, matrix_log))
+    Ok((client, device_id, matrix_log))
 }

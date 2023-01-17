@@ -13,7 +13,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Duration;
 use thiserror::Error;
 use tokio::{self, select};
 
@@ -202,8 +201,7 @@ pub async fn download(
     urls: Vec<&str>,
     output_dir: &str,
 ) -> Result<(), Error> {
-    let (client, device_id, first_sync_response, _matrix_log) =
-        matrix_common::init(&config).await?;
+    let (client, device_id, _matrix_log) = matrix_common::init(&config).await?;
 
     info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
@@ -259,10 +257,7 @@ pub async fn download(
         let output_dir = String::from(output_dir);
         async move { transfer(output_dir, transport, offer_content).await }
     });
-    let sync_settings = SyncSettings::default()
-        .filter(matrix_common::just_joined_rooms_filter())
-        .timeout(Duration::from_millis(10000))
-        .token(first_sync_response.next_batch);
+    let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 
     select! {
     	done = client.sync(sync_settings) => {

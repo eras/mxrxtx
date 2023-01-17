@@ -204,8 +204,7 @@ async fn prompt_log_room(config: &config::Config) -> Result<Option<String>, Erro
     )
     .await?;
     if !log_room.is_empty() {
-        let (client, _device_id, _first_sync_response, _matrix_log) =
-            matrix_common::init(config).await?;
+        let (client, _device_id, _matrix_log) = matrix_common::init(config).await?;
 
         let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
 

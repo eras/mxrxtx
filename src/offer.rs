@@ -8,7 +8,6 @@ use matrix_sdk::config::SyncSettings;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use thiserror::Error;
 use tokio::select;
 
@@ -124,7 +123,7 @@ pub async fn accepter(
 
 #[rustfmt::skip::macros(select)]
 pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Result<(), Error> {
-    let (client, device_id, first_sync_response, matrix_log) = matrix_common::init(&config).await?;
+    let (client, device_id, matrix_log) = matrix_common::init(&config).await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
@@ -182,10 +181,7 @@ pub async fn offer(config: config::Config, room: &str, files: Vec<&str>) -> Resu
         ))
         .await?;
 
-    let sync_settings = SyncSettings::default()
-        .filter(matrix_common::just_joined_rooms_filter())
-        .timeout(Duration::from_millis(10000))
-        .token(first_sync_response.next_batch);
+    let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 
     let signaling_router =
         MatrixSignalingRouter::new(client.clone(), device_id, event_id.clone()).await;

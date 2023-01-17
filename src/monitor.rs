@@ -183,11 +183,11 @@ pub async fn monitor(
     output_dir: &str,
     rooms: Option<Vec<String>>,
 ) -> Result<(), Error> {
-    let (client, device_id, first_sync_response, matrix_log) = matrix_common::init(&config).await?;
+    let (client, device_id, matrix_log) = matrix_common::init(&config).await?;
 
     matrix_log.log("Starting monitor").await?;
 
-    let sync_settings = SyncSettings::default().token(first_sync_response.next_batch);
+    let sync_settings = SyncSettings::default();
 
     let rooms = match rooms {
         None => None,

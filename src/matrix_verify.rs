@@ -220,12 +220,11 @@ pub async fn add_event_handlers(
 
 #[rustfmt::skip::macros(select)]
 pub async fn verify(config: config::Config) -> Result<(), Error> {
-    let (client, _device_id, first_sync_response, matrix_log) =
-        matrix_common::init(&config).await?;
+    let (client, _device_id, matrix_log) = matrix_common::init(&config).await?;
 
     let (result_send, mut result_receive) = mpsc::unbounded_channel();
     add_event_handlers(client.clone(), result_send).await?;
-    let sync_settings = SyncSettings::default().token(first_sync_response.next_batch);
+    let sync_settings = SyncSettings::default();
 
     info!("Ready for verification");
     select! {
