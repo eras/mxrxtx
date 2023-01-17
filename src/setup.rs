@@ -379,6 +379,18 @@ pub async fn setup_mode(
     );
 
     drop(client);
+
+    println!(
+        "Starting emoji verification. Press ^C to skip.\n\
+	 You may restart verification later with mxrxtx verify.\n\
+	 \n\
+	 Note that the initial sync can take a very long time. For me it takes 10 minutes.\n\
+	 \n\
+	 Don't start the verification before the message \"Ready for verification\" appears.",
+    );
+
+    crate::matrix_verify::verify(config.clone()).await?;
+
     match prompt_log_room(&config).await {
         Ok(Some(log_room)) => {
             config.log_room = Some(log_room);
@@ -393,12 +405,6 @@ pub async fn setup_mode(
             );
         }
     }
-
-    info!(
-        "Starting emoji verification. Press ^C to skip. \
-	 You may restart verification later with mxrxtx verify."
-    );
-    crate::matrix_verify::verify(config).await?;
 
     Ok(())
 }
