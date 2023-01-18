@@ -112,7 +112,7 @@ impl Transport {
     //async fn start(&mut self) {}
 
     pub async fn stop(&mut self) -> Result<(), Error> {
-        info!("Disconnecting");
+        debug!("Disconnecting");
         debug!("Sending to stop_tx");
         if let Err(()) = self
             .stop_tx
@@ -132,7 +132,7 @@ impl Transport {
     }
 
     pub async fn connect(&mut self) -> Result<DataStream, Error> {
-        info!("Connecting");
+        debug!("Connecting");
         match &self.state {
             Some(State::PeerConnection(peer_connection)) => {
                 let stream = (*peer_connection).dial("hello").await?;
@@ -146,7 +146,7 @@ impl Transport {
     }
 
     pub async fn accept(&mut self) -> Result<DataStream, Error> {
-        info!("Accepting connection");
+        debug!("Accepting connection");
         match &mut self.state {
             Some(State::PeerConnection(peer_connection)) => {
                 let stream = (*peer_connection).accept().await?;

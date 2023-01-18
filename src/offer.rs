@@ -1,9 +1,10 @@
 use crate::{
     config, digest, level_event::LevelEvent, matrix_common, matrix_log,
-    matrix_signaling::MatrixSignalingRouter, protocol, signaling::SignalingRouter, transport,
-    utils::escape,
+    matrix_signaling::MatrixSignalingRouter, progress_common, protocol, signaling::SignalingRouter,
+    transport, utils::escape,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
+use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use matrix_sdk::config::SyncSettings;
 use sha2::{Digest, Sha512};
 use std::cmp;
@@ -41,9 +42,21 @@ pub enum Error {
     MatrixLogError(#[from] matrix_log::Error),
 }
 
+pub fn make_transfer_progress(
+    offer_files: &Vec<protocol::File>,
+    multi: Option<&MultiProgress>,
+) -> ProgressBar {
+    let mut size = 0u64;
+    for offer_file in offer_files {
+        size += offer_file.size;
+    }
+    progress_common::make_transfer_progress(size, multi)
+}
+
 pub async fn transfer(
     offer_files: Vec<protocol::File>,
     mut cn: transport::DataStream,
+    progress: ProgressBar,
 ) -> Result<(), Error> {
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut total_bytes = 0;
@@ -56,6 +69,7 @@ pub async fn transfer(
         while !eof && sent_file_bytes < file_size {
             let read_bytes = cmp::min(file_size - sent_file_bytes, buffer.len());
             let n = file.read(&mut buffer[0..read_bytes])?;
+            progress.inc(n as u64);
             if n == 0 {
                 eof = true;
             } else {
@@ -83,6 +97,7 @@ pub async fn transfer(
         }
     }
     debug!("Wrote {total_bytes}, waiting ack");
+    progress.set_message("Waiting ACK");
     cn.read_exact(&mut buffer[0..2]).await?;
     Ok(())
 }
@@ -94,6 +109,7 @@ pub fn accepter_recurse(
     signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
+    multi_progress: MultiProgress,
 ) -> BoxFuture<'static, ()> {
     Box::pin(async move {
         accepter(
@@ -102,6 +118,7 @@ pub fn accepter_recurse(
             signaling_router,
             ice_servers.clone(),
             matrix_log,
+            multi_progress,
         )
         .await
         // TODO: handle IO error when peer closes connection
@@ -115,14 +132,20 @@ pub async fn accepter(
     mut signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
+    multi_progress: MultiProgress,
 ) -> Result<(), Error> {
-    info!("Waiting for new signaling peer");
+    let spinner =
+        progress_common::make_spinner(Some(&multi_progress)).with_finish(ProgressFinish::AndClear);
+    matrix_log
+        .log(Some(&spinner), "Waiting for new signaling peer")
+        .await?;
     let signaling = signaling_router.accept().await.unwrap();
     tokio::spawn({
         let ice_servers = ice_servers.clone();
         let exit_signal = exit_signal.clone();
         let offer_files = offer_files.clone();
         let matrix_log = matrix_log.clone();
+        let multi_progress = multi_progress.clone();
         async move {
             accepter_recurse(
                 exit_signal,
@@ -130,19 +153,23 @@ pub async fn accepter(
                 signaling_router,
                 ice_servers,
                 matrix_log,
+                multi_progress,
             )
             .await
         }
     });
     let mut transport =
         transport::Transport::new(signaling, ice_servers.iter().map(|x| x.as_str()).collect())?;
-    matrix_log.log("Accepting a connection").await?;
+    matrix_log
+        .log(Some(&spinner), "Accepting a connection")
+        .await?;
     let cn = transport.accept().await?;
     matrix_log
-        .log("Accepted a connection, transferring file")
+        .log(Some(&spinner), "Accepted a connection, transferring file")
         .await?;
-    transfer(offer_files, cn).await?;
-    matrix_log.log("Transferring complete").await?;
+    let progress = make_transfer_progress(&offer_files, Some(&multi_progress));
+    transfer(offer_files, cn, progress).await?;
+    matrix_log.log(None, "Transferring complete").await?;
     // debug!("Received ack, stopping");
     // transport.stop().await?;
     // info!("Transfer stopped");
@@ -162,6 +189,10 @@ pub async fn offer(
         matrix_log,
         ..
     } = matrix_common::init(&config).await?;
+
+    let multi_progress = MultiProgress::new();
+    let spinner = progress_common::make_spinner(Some(&multi_progress));
+    matrix_log.log(Some(&spinner), "Starting").await?;
 
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
@@ -228,10 +259,10 @@ pub async fn offer(
     });
 
     matrix_log
-        .log(&format!(
-            "Offer for {} started",
-            escape(&uri.matrix_uri_string())
-        ))
+        .log(
+            Some(&spinner),
+            &format!("Offer for {} started", escape(&uri.matrix_uri_string())),
+        )
         .await?;
 
     let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
@@ -242,6 +273,7 @@ pub async fn offer(
     tokio::spawn({
         let exit_signal = exit_signal.clone();
         let matrix_log = matrix_log.clone();
+        let multi_progress = multi_progress.clone();
         async move {
             accepter(
                 exit_signal,
@@ -249,6 +281,7 @@ pub async fn offer(
                 signaling_router,
                 config.ice_servers,
                 matrix_log,
+                multi_progress,
             )
             .await
         }
@@ -267,7 +300,8 @@ pub async fn offer(
         Some(matrix_sdk::ruma::TransactionId::new()),
     )
     .await?;
-    matrix_log.log("Offer stopped (redacted)").await?;
+    matrix_log.log(None, "Offer stopped (redacted)").await?;
+    spinner.finish_with_message("Offer stopped (redacted)");
 
     Ok(())
 }

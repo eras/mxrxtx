@@ -1,4 +1,4 @@
-use crate::{config, matrix_log};
+use crate::{config, matrix_log, progress_common};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
 use matrix_sdk::ruma::OwnedDeviceId;
@@ -201,6 +201,9 @@ async fn get_device_name(client: &Client) -> Result<String, Error> {
 }
 
 pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
+    let spinner = progress_common::make_spinner(None);
+    spinner.set_message("Setup session");
+
     let session = config.get_matrix_session()?;
 
     let sync_settings = SyncSettings::default()
@@ -214,10 +217,10 @@ pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
         .build()
         .await?;
     let device_id = session.device_id.clone();
-    info!("Restoring session");
+    spinner.set_message("Restore session");
     client.restore_session(session).await?;
 
-    info!("Sync");
+    spinner.set_message("Sync");
     let _sync_response = sync_once_with_token(&client, sync_settings).await?;
 
     let device_name = get_device_name(&client).await?;

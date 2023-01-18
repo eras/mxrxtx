@@ -10,6 +10,7 @@ pub mod matrix_signaling;
 pub mod matrix_verify;
 pub mod monitor;
 pub mod offer;
+pub mod progress_common;
 pub mod protocol;
 pub mod setup;
 pub mod signaling;

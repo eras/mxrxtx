@@ -85,9 +85,14 @@ async fn transfer_file() {
                 }
                 offer_file.name = file_path.to_string_lossy().to_string();
             }
-            offer::transfer(offer_content.files, transport.accept().await.unwrap())
-                .await
-                .map_err(anyhow::Error::from)
+            let progress = offer::make_transfer_progress(&offer_content.files, None);
+            offer::transfer(
+                offer_content.files,
+                transport.accept().await.unwrap(),
+                progress,
+            )
+            .await
+            .map_err(anyhow::Error::from)
         }
     });
     let download_task = tokio::spawn({
@@ -99,7 +104,7 @@ async fn transfer_file() {
                 let download_tmp_dir = download_tmp_dir.lock().await;
                 String::from(download_tmp_dir.as_ref().unwrap().path().to_str().unwrap())
             };
-            download::transfer(download_path, transport, offer_content)
+            download::transfer(download_path, transport, offer_content, None)
                 .await
                 .map_err(anyhow::Error::from)
         }

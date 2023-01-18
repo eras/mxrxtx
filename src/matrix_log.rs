@@ -1,4 +1,5 @@
 use crate::{config, matrix_common, utils};
+use indicatif::ProgressBar;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 use matrix_sdk::{room::Joined, Client};
 use thiserror::Error;
@@ -45,8 +46,10 @@ impl MatrixLog {
         }
     }
 
-    pub async fn log(&self, message: &str) -> Result<(), Error> {
-        info!("{message}");
+    pub async fn log(&self, progress: Option<&ProgressBar>, message: &str) -> Result<(), Error> {
+        if let Some(progress) = progress {
+            progress.set_message(message.to_string());
+        }
         match &self.log_room {
             None => Ok(()),
             Some(log_room) => {

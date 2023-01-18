@@ -28,11 +28,16 @@ pub enum Error {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let args = clap::App::new("mxrxtx")
+    let version = get_version();
+    let config_help = format!(
+        "Config file to load, defaults to {}",
+        setup::get_config_file(None)?
+    );
+    let app = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
         .setting(clap::AppSettings::ArgRequiredElseHelp)
         .before_help("Licensed under the MIT license")
-        .version(get_version().as_str())
+        .version(version.as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about(
             "Transfer files over Matrix, directly from client to client with WebRTC. \n\
@@ -45,13 +50,7 @@ async fn main() -> Result<(), Error> {
                 .short('c')
                 .takes_value(true)
                 .value_name("FILE")
-                .help(
-                    format!(
-                        "Config file to load, defaults to {}",
-                        setup::get_config_file(None)?
-                    )
-                    .as_str(),
-                ),
+                .help(config_help.as_str()),
         )
         .arg(
             clap::Arg::new("output-dir")
@@ -81,8 +80,6 @@ async fn main() -> Result<(), Error> {
                         .index(1)
                         .required(true)
                         .value_name("URL")
-                        .multiple_values(false)
-                        .min_values(1)
                         .help(
                             "Download files offered by a given Matrix event, given as a matrix: \
 			  or https://matrix.to url",
@@ -129,13 +126,14 @@ async fn main() -> Result<(), Error> {
                         ),
                 ),
         )
-        .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"))
-        .get_matches();
+        .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"));
+    let info_string = app.render_long_version().trim().to_string();
+    let args = app.get_matches();
 
     if args.is_present("trace") {
         tracing_subscriber::fmt::init();
     } else {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=info"))
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=warn"))
             .format(|buf, record| {
                 writeln!(
                     buf,
@@ -153,6 +151,7 @@ async fn main() -> Result<(), Error> {
 
     let output_dir = args.value_of("output-dir").unwrap();
 
+    println!("{info_string}");
     match args.subcommand() {
         Some(("setup", _sub_args)) => setup::setup_mode(args, config, &config_file).await?,
         Some(("monitor", monitor_args)) => {

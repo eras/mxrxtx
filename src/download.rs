@@ -1,10 +1,11 @@
 use crate::{
     config, matrix_common,
     matrix_signaling::{MatrixSignaling, SessionInfo},
-    protocol, transport,
+    progress_common, protocol, transport,
     utils::{escape, escape_paths},
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
+use indicatif::MultiProgress;
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::{OwnedEventId, OwnedRoomId};
 use sha2::{Digest, Sha512};
@@ -133,19 +134,20 @@ pub async fn transfer(
     output_dir: String,
     mut transport: transport::Transport,
     offer_content: protocol::OfferContent,
+    multi: Option<&MultiProgress>,
 ) -> Result<(), Error> {
     debug!("Connecting!");
     let mut cn = transport.connect().await?;
     debug!("Connected!");
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut eof = false;
-    let mut total_bytes = 0;
+    let mut received_bytes = 0;
     let files = &offer_content.files;
     let expected_bytes = files.iter().map(|x| x.size as usize).sum();
     let mut file_idx = 0usize;
     let mut file_offset = 0usize;
     let mut cur_file_hasher: Option<(File, Sha512)> = None;
-    let finalize_cur_file_hasher = |file_idx: usize, cur_file_hasher: Option<(File, Sha512)>| {
+    let finalize_file = |file_idx: usize, cur_file_hasher: Option<(File, Sha512)>| {
         if let Some((_, hasher)) = cur_file_hasher {
             if let Some(expected) = files[file_idx].hashes.get("sha512") {
                 let result = hasher.finalize();
@@ -159,7 +161,14 @@ pub async fn transfer(
             }
         }
     };
-    while !eof && file_idx < files.len() && total_bytes < expected_bytes {
+    let multi = if let Some(multi) = multi {
+        multi.clone()
+    } else {
+        MultiProgress::new()
+    };
+    let overall_progress =
+        progress_common::make_transfer_progress(expected_bytes as u64, Some(&multi));
+    while !eof && file_idx < files.len() && received_bytes < expected_bytes {
         // todo: doesn't handle transferring single 0-byte file
         let mut n = match cn.read(&mut buffer).await {
             Ok(x) => x,
@@ -171,13 +180,14 @@ pub async fn transfer(
                 0
             }
         };
-        total_bytes += n;
+        received_bytes += n;
+        overall_progress.inc(n as u64);
         eof = n == 0;
         let mut buffer_offset = 0usize;
         while n > 0 && file_idx < files.len() {
             let cur_bytes_remaining = files[file_idx].size as usize - file_offset;
             if cur_bytes_remaining == 0 {
-                finalize_cur_file_hasher(file_idx, cur_file_hasher.take());
+                finalize_file(file_idx, cur_file_hasher.take());
                 file_idx += 1;
                 file_offset = 0usize;
             } else {
@@ -185,7 +195,6 @@ pub async fn transfer(
                 if cur_file_hasher.is_none() {
                     let mut path = PathBuf::from(&output_dir);
                     path.push(escape_paths(&files[file_idx].name));
-                    info!("Downloading {:?}", escape(&path.to_string_lossy()));
                     let file = File::create(&path)?;
                     let hasher = Sha512::new();
                     cur_file_hasher = Some((file, hasher));
@@ -205,13 +214,13 @@ pub async fn transfer(
         }
     }
     if file_idx < files.len() {
-        finalize_cur_file_hasher(file_idx, cur_file_hasher.take());
+        finalize_file(file_idx, cur_file_hasher.take());
     }
     debug!("Exiting loop");
     cn.write_all(b"ok").await?;
-    info!("Received {total_bytes} bytes");
+    //info!("Received {received_bytes} bytes");
     transport.stop().await?;
-    info!("Transport stopped");
+    //info!("Transport stopped");
     Ok(())
 }
 
@@ -225,7 +234,7 @@ pub async fn download(
         client, device_id, ..
     } = matrix_common::init(&config).await?;
 
-    info!("Retrieving event");
+    //info!("Retrieving event");
     let uri = matrix_uri::MatrixUri::from_str(urls[0]).map_err(MatrixUriParseError)?;
     let room_id = get_room_id_from_uri(&uri)?;
     let room = client
@@ -277,7 +286,7 @@ pub async fn download(
 
     let download_task = tokio::spawn({
         let output_dir = String::from(output_dir);
-        async move { transfer(output_dir, transport, offer_content).await }
+        async move { transfer(output_dir, transport, offer_content, None).await }
     });
     let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 

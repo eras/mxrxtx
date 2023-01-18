@@ -3,8 +3,9 @@ use crate::{
     level_event::LevelEvent,
     matrix_common, matrix_log,
     matrix_signaling::{MatrixSignaling, SessionInfo},
-    protocol, transport,
+    progress_common, protocol, transport,
 };
+use indicatif::MultiProgress;
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::ruma::OwnedDeviceId;
 use matrix_sdk::{
@@ -46,6 +47,7 @@ struct Monitor {
     rooms: Option<Vec<Joined>>,
     client: Client,
     matrix_log: Arc<Mutex<matrix_log::MatrixLog>>,
+    multi_progress: MultiProgress,
 }
 
 impl Monitor {
@@ -56,6 +58,7 @@ impl Monitor {
         output_dir: String,
         rooms: Option<Vec<Joined>>,
         matrix_log: matrix_log::MatrixLog,
+        multi_progress: MultiProgress,
     ) -> (
         Arc<Mutex<Monitor>>,
         mpsc::UnboundedReceiver<Result<(), Error>>,
@@ -70,6 +73,7 @@ impl Monitor {
             rooms,
             client: client.clone(),
             matrix_log,
+            multi_progress,
         }));
         // TODO: remove added event handlers on Drop
         client.add_event_handler({
@@ -142,30 +146,38 @@ impl Monitor {
                 .map(|x| x.as_str())
                 .collect(),
         )?;
+        // TODO: use locking to ensure entries to MultiProgress are made sequentially
+        let progress = progress_common::make_spinner(Some(&self.multi_progress));
         // TODO: handle errors
         let _download_task = tokio::spawn({
             let matrix_log = self.matrix_log.clone();
             let output_dir = self.output_dir.clone();
             let event_id = event_id.clone();
+            let multi_progress = self.multi_progress.clone();
             async move {
                 let matrix_log = matrix_log.clone();
                 {
                     let matrix_log = matrix_log.lock().await;
                     // TODO: handle errors
                     let _ignore = matrix_log
-                        .log(&format!("Download of event {} starting", event_id))
+                        .log(
+                            Some(&progress),
+                            &format!("Download of event {} starting", event_id),
+                        )
                         .await;
                 }
                 // TODO: handle errors
-                let status = download::transfer(output_dir, transport, offer_content).await;
+                let status =
+                    download::transfer(output_dir, transport, offer_content, Some(&multi_progress))
+                        .await;
                 {
                     let matrix_log = matrix_log.lock().await;
                     // TODO: handle errors
                     let _ignore = matrix_log
-                        .log(&format!(
-                            "Downloading of event {} finished: {:?}",
-                            event_id, status
-                        ))
+                        .log(
+                            Some(&progress),
+                            &format!("Downloading of event {} finished: {:?}", event_id, status),
+                        )
                         .await;
                 }
             }
@@ -190,7 +202,9 @@ pub async fn monitor(
         ..
     } = matrix_common::init(&config).await?;
 
-    matrix_log.log("Starting monitor").await?;
+    let multi = MultiProgress::new();
+    let spinner = progress_common::make_spinner(Some(&multi));
+    matrix_log.log(Some(&spinner), "Starting monitor").await?;
 
     let sync_settings = SyncSettings::default();
 
@@ -207,8 +221,7 @@ pub async fn monitor(
         ),
     };
 
-    info!("Finished initial sync, waiting for offers");
-    matrix_log.log("Monitoring offers").await?;
+    matrix_log.log(Some(&spinner), "Monitoring offers").await?;
 
     let exit_signal = LevelEvent::new();
     tokio::spawn({
@@ -228,6 +241,7 @@ pub async fn monitor(
         output_dir.to_string(),
         rooms,
         matrix_log.clone(),
+        multi,
     );
     select! {
     	_exit = exit_signal.wait() => (),
@@ -240,7 +254,7 @@ pub async fn monitor(
 	    done?;
 	}
     }
-    matrix_log.log("Monitoring stopped").await?;
+    matrix_log.log(Some(&spinner), "Monitoring stopped").await?;
 
     Ok(())
 }
