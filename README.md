@@ -70,7 +70,7 @@ the state store and maybe weed out those hackers from the homeserver..
 # Usage
 ## Install
 
-Binaries for Ubuntu Windows are available in the [GitHub releases
+Binaries for Ubuntu and Windows are available in the [GitHub releases
 page](../../releases/latest/). Download a binary, extract it and run
 it from a terminal.
 
