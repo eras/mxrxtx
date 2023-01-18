@@ -104,6 +104,7 @@ pub fn accepter_recurse(
             matrix_log,
         )
         .await
+        // TODO: handle IO error when peer closes connection
         .unwrap()
     }) as BoxFuture<()>
 }
