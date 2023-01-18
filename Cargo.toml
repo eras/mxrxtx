@@ -46,3 +46,7 @@ termion = "1.5.6"
 
 [build-dependencies]
 vergen = "3"
+
+# It's annoyingly slow during testing otherwise
+[profile.dev.package.sha2]
+opt-level = 3
