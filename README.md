@@ -51,7 +51,7 @@ the state store and maybe weed out those hackers from the homeserver..
 ## Features
 
 - Available for Linux and Windows
-- Setup mode easy configuration; supports single signon
+- Setup mode easy configuration; supports single sign-on
 - Offer can contain multiple files and directories
 - Supports E2EE and emoji cross-signing verification
 - Monitor mode for downloading all received offers
@@ -65,7 +65,7 @@ the state store and maybe weed out those hackers from the homeserver..
 - Mac build, if enabled on CI, would crash during the unit tests
 - Protocol is not final at all
 - Does not use [MSC1767 extensible events](https://github.com/matrix-org/matrix-spec-proposals/pull/1767) yet
-- My todo list for `mxrxtx` has 100+ entries
+- My TODO list for `mxrxtx` has 100+ entries
 
 # Usage
 ## Install
@@ -130,7 +130,7 @@ Theory operation is as follows:
 - Client B is informed about the URI for this event and retrieves the contents of the event
 - Client B sends a custom ToDevice message to A to start the WebRTC handshake (ice servers may be consulted)
 - Client A responds to client B to continue the WebRTC handshake
-- Clients A and B have now formed a WebRTC datachannel connection
+- Clients A and B have now formed a WebRTC data channel connection
 - Client A starts sending the contents of the offer from start to end (no framing so far)
 - Client B received the contents and writes them to a file
 - Once Client B has received the final byte it sends "ok" to A and terminates
