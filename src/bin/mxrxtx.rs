@@ -41,6 +41,7 @@ async fn main() -> Result<(), Error> {
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about(
             "Transfer files over Matrix, directly from client to client with WebRTC. \n\
+             Visit https://github.com/eras/mxrxrx/ or #mxrxtx:matrix.org for more info!\n\
 	     \n\
 	     Licensed under the MIT license; refer to LICENSE.MIT for details.",
         )
