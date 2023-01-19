@@ -10,6 +10,7 @@ use futures::stream::StreamExt;
 use matrix_sdk::{
     config::SyncSettings,
     encryption::verification::{format_emojis, Emoji, SasState, SasVerification, Verification},
+    event_handler::EventHandlerHandle,
     ruma::{
         events::{
             key::verification::{
@@ -151,8 +152,9 @@ async fn sas_verification_handler(
 pub async fn add_event_handlers(
     client: Client,
     result_send: mpsc::UnboundedSender<Result<bool, Error>>,
-) -> matrix_sdk::Result<()> {
-    client.add_event_handler(
+) -> matrix_sdk::Result<Vec<EventHandlerHandle>> {
+    let mut handlers = Vec::new();
+    handlers.push(client.add_event_handler(
         |ev: ToDeviceKeyVerificationRequestEvent, client: Client| async move {
             let request = client
                 .encryption()
@@ -165,9 +167,9 @@ pub async fn add_event_handlers(
                 .await
                 .expect("Can't accept verification request");
         },
-    );
+    ));
 
-    client.add_event_handler({
+    handlers.push(client.add_event_handler({
         let result_send = result_send.clone();
         move |ev: ToDeviceKeyVerificationStartEvent, client: Client| {
             let result_send = result_send.clone();
@@ -181,9 +183,9 @@ pub async fn add_event_handlers(
                 }
             }
         }
-    });
+    }));
 
-    client.add_event_handler(
+    handlers.push(client.add_event_handler(
         |ev: OriginalSyncRoomMessageEvent, client: Client| async move {
             if let MessageType::VerificationRequest(_) = &ev.content.msgtype {
                 let request = client
@@ -198,9 +200,9 @@ pub async fn add_event_handlers(
                     .expect("Can't accept verification request");
             }
         },
-    );
+    ));
 
-    client.add_event_handler({
+    handlers.push(client.add_event_handler({
         move |ev: OriginalSyncKeyVerificationStartEvent, client: Client| {
             let result_send = result_send.clone();
             async move {
@@ -213,9 +215,15 @@ pub async fn add_event_handlers(
                 }
             }
         }
-    });
+    }));
 
-    Ok(())
+    Ok(handlers)
+}
+
+fn drop_handlers(client: &Client, handlers: Vec<EventHandlerHandle>) {
+    handlers
+        .into_iter()
+        .for_each(|handler| client.remove_event_handler(handler));
 }
 
 #[rustfmt::skip::macros(select)]
@@ -225,7 +233,7 @@ pub async fn verify(config: config::Config) -> Result<(), Error> {
     } = matrix_common::init(&config).await?;
 
     let (result_send, mut result_receive) = mpsc::unbounded_channel();
-    add_event_handlers(client.clone(), result_send).await?;
+    let handlers = add_event_handlers(client.clone(), result_send).await?;
     let sync_settings = SyncSettings::default();
 
     info!("Ready for verification");
@@ -233,7 +241,7 @@ pub async fn verify(config: config::Config) -> Result<(), Error> {
 	result = result_receive.recv() => {
 	    if let Some(result) = result {
 		if result? {
-		    matrix_log.log("Verification completed").await?;
+		    matrix_log.log(None, "Verification completed").await?;
 		} else {
 		    info!("Verification failed");
 		}
@@ -243,6 +251,8 @@ pub async fn verify(config: config::Config) -> Result<(), Error> {
 	    done?;
 	}
     }
+
+    drop_handlers(&client, handlers);
 
     Ok(())
 }
