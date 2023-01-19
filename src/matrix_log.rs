@@ -22,7 +22,11 @@ pub struct MatrixLog {
 }
 
 impl MatrixLog {
-    pub async fn new(client: &Client, config: &config::Config) -> Result<Self, Error> {
+    pub async fn new(
+        client: &Client,
+        config: &config::Config,
+        device_name: &str,
+    ) -> Result<Self, Error> {
         match &config.log_room {
             None => Ok(MatrixLog {
                 log_room: None,
@@ -33,13 +37,9 @@ impl MatrixLog {
                     .await
                     .map_err(Box::new)?;
                 let log_room = Some(log_room);
-                let device_id = match client.device_id() {
-                    Some(device_id) => utils::escape(device_id.as_ref()),
-                    None => "unknown".to_string(),
-                };
                 Ok(MatrixLog {
                     log_room,
-                    device_str: device_id,
+                    device_str: utils::escape(device_name),
                 })
             }
         }

@@ -182,7 +182,22 @@ pub async fn sync_once_with_token(
 pub struct MatrixInit {
     pub client: Client,
     pub device_id: OwnedDeviceId,
+    pub device_name: String,
     pub matrix_log: matrix_log::MatrixLog,
+}
+
+async fn get_device_name(client: &Client) -> Result<String, Error> {
+    for device in client.devices().await?.devices {
+        if Some(device.device_id) == client.device_id().map(|x| x.to_owned()) {
+            if let Some(device_name) = device.display_name {
+                return Ok(device_name);
+            }
+        }
+    }
+    Ok(client
+        .device_id()
+        .map(|x| x.to_string())
+        .unwrap_or_else(|| "unknown".to_string()))
 }
 
 pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
@@ -205,11 +220,13 @@ pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
     info!("Sync");
     let _sync_response = sync_once_with_token(&client, sync_settings).await?;
 
-    let matrix_log = matrix_log::MatrixLog::new(&client, config).await?;
+    let device_name = get_device_name(&client).await?;
+    let matrix_log = matrix_log::MatrixLog::new(&client, config, &device_name).await?;
 
     Ok(MatrixInit {
         client,
         device_id,
+        device_name,
         matrix_log,
     })
 }
