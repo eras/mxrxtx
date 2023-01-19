@@ -39,6 +39,9 @@ pub enum Error {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
+    DigestError(#[from] digest::Error),
+
+    #[error(transparent)]
     MatrixLogError(#[from] matrix_log::Error),
 }
 
@@ -197,23 +200,27 @@ pub async fn offer(
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
 
+    matrix_log
+        .log(Some(&spinner), "Calculating checksums")
+        .await?;
     let offer_files: Vec<protocol::File> = offer_files
         .iter()
-        .map(|file| {
-            let (sha512, size) = digest::file_sha512(Path::new(&file));
+        .map(|file| -> Result<protocol::File, Error> {
+            let (sha512, size) = digest::file_sha512(Path::new(&file), Some(&multi_progress))?;
             let mut hashes = BTreeMap::new();
             hashes.insert("sha512".to_string(), sha512);
-            debug!("moi");
-            fs::metadata(Path::new(&file)).map(|_metadata| protocol::File {
-                // we need to get date later so let's not drop this metadata thing yet..
-                name: file.to_string(),
-                mimetype: String::from("application/octet-stream"),
-                size, // TODO: respect this when sending file
-                thumbnail_file: None,
-                thumbnail_info: None,
-                thumbnail_url: None,
-                hashes,
-            })
+            Ok(
+                fs::metadata(Path::new(&file)).map(|_metadata| protocol::File {
+                    // we need to get date later so let's not drop this metadata thing yet..
+                    name: file.to_string(),
+                    mimetype: String::from("application/octet-stream"),
+                    size, // TODO: respect this when sending file
+                    thumbnail_file: None,
+                    thumbnail_info: None,
+                    thumbnail_url: None,
+                    hashes,
+                })?,
+            )
         })
         .try_fold(Vec::new(), |mut acc: Vec<protocol::File>, file_result| {
             acc.push(file_result?);
@@ -227,6 +234,8 @@ pub async fn offer(
         thumbnail_info: None,
         thumbnail_url: None,
     };
+
+    matrix_log.log(Some(&spinner), "Sending event").await?;
 
     let event_id = room
         .send(offer, Some(&matrix_sdk::ruma::TransactionId::new()))
