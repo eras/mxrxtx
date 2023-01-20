@@ -40,7 +40,10 @@ to establish peer identity over the WebRTC connection. The metadata
 and the data are safe from modifications _but they are not
 confidential_ because the file data and their SHA512 is shared in the
 original message encrypted, __but only if__ the message was shared in
-an encrypted room.
+an encrypted room. In addition, the IP addresses of the clients
+participating in the transfer is visible to the homeserver
+involved. And of course the clients themselves will see the IP
+addresses, because that's what you need to send the data :).
 
 You may do the emoji verification at the end of the `setup`, or
 separately with the `verify` sub-command. (Verification is not
