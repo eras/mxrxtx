@@ -2,6 +2,7 @@ use crate::{
     config, digest, level_event::LevelEvent, matrix_common, matrix_log,
     matrix_signaling::MatrixSignalingRouter, progress_common, protocol, signaling::Signaling,
     signaling::SignalingRouter, transfer_session::TransferSession, transport, utils::escape,
+    version::get_version,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
@@ -233,6 +234,7 @@ pub async fn offer(
         })?;
 
     let offer = protocol::OfferContent {
+        version: get_version(),
         name: None,
         description: None,
         files: offer_files.clone(),

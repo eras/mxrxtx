@@ -48,6 +48,9 @@ pub struct File {
 #[derive(Debug, Serialize, Deserialize, EventContent, Default, Clone)]
 #[ruma_event(type = "fi.variaattori.mxrxtx.offer", kind = MessageLike)]
 pub struct OfferContent {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
