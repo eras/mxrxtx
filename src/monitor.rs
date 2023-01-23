@@ -3,7 +3,9 @@ use crate::{
     level_event::LevelEvent,
     matrix_common, matrix_log,
     matrix_signaling::{MatrixSignaling, SessionInfo},
-    progress_common, protocol, transport,
+    progress_common, protocol,
+    transfer_session::TransferSession,
+    transport,
 };
 use indicatif::MultiProgress;
 use matrix_sdk::config::SyncSettings;
@@ -39,6 +41,17 @@ pub enum Error {
     MatrixLogError(#[from] matrix_log::Error),
 }
 
+struct Setup {
+    client: Client,
+    device_id: OwnedDeviceId,
+    config: config::Config,
+    output_dir: String,
+    rooms: Option<Vec<Joined>>,
+    matrix_log: matrix_log::MatrixLog,
+    multi_progress: MultiProgress,
+    transfer_session: TransferSession,
+}
+
 struct Monitor {
     device_id: OwnedDeviceId,
     config: config::Config,
@@ -48,35 +61,31 @@ struct Monitor {
     client: Client,
     matrix_log: Arc<Mutex<matrix_log::MatrixLog>>,
     multi_progress: MultiProgress,
+    transfer_session: Arc<Mutex<TransferSession>>,
 }
 
 impl Monitor {
     fn new(
-        client: &Client,
-        device_id: OwnedDeviceId,
-        config: config::Config,
-        output_dir: String,
-        rooms: Option<Vec<Joined>>,
-        matrix_log: matrix_log::MatrixLog,
-        multi_progress: MultiProgress,
+        setup: Setup,
     ) -> (
         Arc<Mutex<Monitor>>,
         mpsc::UnboundedReceiver<Result<(), Error>>,
     ) {
         let (results_send, results_receive) = mpsc::unbounded_channel();
-        let matrix_log = Arc::new(Mutex::new(matrix_log));
+        let matrix_log = Arc::new(Mutex::new(setup.matrix_log));
         let monitor = Arc::new(Mutex::new(Monitor {
-            device_id,
-            config,
+            device_id: setup.device_id,
+            config: setup.config,
             results_send,
-            output_dir,
-            rooms,
-            client: client.clone(),
+            output_dir: setup.output_dir,
+            rooms: setup.rooms,
+            client: setup.client.clone(),
             matrix_log,
-            multi_progress,
+            multi_progress: setup.multi_progress,
+            transfer_session: Arc::new(Mutex::new(setup.transfer_session)),
         }));
         // TODO: remove added event handlers on Drop
-        client.add_event_handler({
+        setup.client.add_event_handler({
             let monitor = monitor.clone();
             move |ev: protocol::SyncOffer, room: Room| {
                 let monitor = monitor.clone();
@@ -131,7 +140,7 @@ impl Monitor {
             self.device_id.clone(),
             event_id.clone(),
             Some(SessionInfo {
-                peer_user_id,
+                peer_user_id: peer_user_id.clone(),
                 peer_device_id: None,
                 id: transfer_id,
             }),
@@ -154,6 +163,8 @@ impl Monitor {
             let output_dir = self.output_dir.clone();
             let event_id = event_id.clone();
             let multi_progress = self.multi_progress.clone();
+            let peer_user_id = peer_user_id.clone();
+            let transfer_session = self.transfer_session.clone();
             async move {
                 let matrix_log = matrix_log.clone();
                 {
@@ -162,20 +173,27 @@ impl Monitor {
                     let _ignore = matrix_log
                         .log(
                             Some(&progress),
-                            &format!("Download of event {} starting", event_id),
+                            &format!("Downloading event {event_id} from {peer_user_id}"),
                         )
                         .await;
                 }
                 // TODO: handle errors
-                let status =
-                    download::transfer(output_dir, transport, offer_content, Some(&multi_progress))
-                        .await;
+                transfer_session.lock().await.inc_tranferring();
+                let status = download::transfer(
+                    output_dir,
+                    transport,
+                    offer_content,
+                    Some(&multi_progress),
+                    peer_user_id.as_ref(),
+                )
+                .await;
                 {
+                    transfer_session.lock().await.inc_complete();
                     let matrix_log = matrix_log.lock().await;
                     // TODO: handle errors
                     let _ignore = matrix_log
                         .log(
-                            Some(&progress),
+                            None,
                             &format!("Downloading of event {} finished: {:?}", event_id, status),
                         )
                         .await;
@@ -185,9 +203,6 @@ impl Monitor {
         Ok(())
     }
 }
-
-// fn check_room(&self, event) {
-// }
 
 #[rustfmt::skip::macros(select)]
 pub async fn monitor(
@@ -222,6 +237,7 @@ pub async fn monitor(
     };
 
     matrix_log.log(Some(&spinner), "Monitoring offers").await?;
+    let transfer_session = TransferSession::new(&multi);
 
     let exit_signal = LevelEvent::new();
     tokio::spawn({
@@ -234,15 +250,16 @@ pub async fn monitor(
         }
     });
 
-    let (_monitor, mut results) = Monitor::new(
-        &client,
+    let (_monitor, mut results) = Monitor::new(Setup {
+        client: client.clone(),
         device_id,
         config,
-        output_dir.to_string(),
+        output_dir: output_dir.to_string(),
         rooms,
-        matrix_log.clone(),
-        multi,
-    );
+        matrix_log: matrix_log.clone(),
+        multi_progress: multi,
+        transfer_session,
+    });
     select! {
     	_exit = exit_signal.wait() => (),
 	done2 = results.recv() => {

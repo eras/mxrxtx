@@ -135,6 +135,7 @@ pub async fn transfer(
     mut transport: transport::Transport,
     offer_content: protocol::OfferContent,
     multi: Option<&MultiProgress>,
+    prefix: &str,
 ) -> Result<(), Error> {
     debug!("Connecting!");
     let mut cn = transport.connect().await?;
@@ -168,6 +169,7 @@ pub async fn transfer(
     };
     let overall_progress =
         progress_common::make_transfer_progress(expected_bytes as u64, Some(&multi));
+    overall_progress.set_prefix(prefix.to_string());
     while !eof && file_idx < files.len() && received_bytes < expected_bytes {
         // todo: doesn't handle transferring single 0-byte file
         let mut n = match cn.read(&mut buffer).await {
@@ -286,7 +288,7 @@ pub async fn download(
 
     let download_task = tokio::spawn({
         let output_dir = String::from(output_dir);
-        async move { transfer(output_dir, transport, offer_content, None).await }
+        async move { transfer(output_dir, transport, offer_content, None, "").await }
     });
     let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 

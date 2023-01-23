@@ -141,8 +141,21 @@ impl MatrixSignalingSingle {
     }
 }
 
+pub struct PeerInfo {
+    pub mxid: Option<OwnedUserId>,
+}
+
 #[async_trait]
 impl Signaling for MatrixSignalingSingle {
+    type PeerInfo = PeerInfo;
+
+    async fn get_peer_info(&self) -> PeerInfo {
+        let session_info = self.session_info.lock().await;
+        PeerInfo {
+            mxid: (*session_info).as_ref().map(|x| x.peer_user_id.clone()),
+        }
+    }
+
     async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
         debug!("MatrixSignalingSingle::send({message:?})");
         if let Some(session_info) = self.session_info.lock().await.clone() {
@@ -256,6 +269,12 @@ impl MatrixSignaling {
 
 #[async_trait]
 impl Signaling for MatrixSignaling {
+    type PeerInfo = <MatrixSignalingSingle as Signaling>::PeerInfo;
+
+    async fn get_peer_info(&self) -> Self::PeerInfo {
+        self.signaling.get_peer_info().await
+    }
+
     async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
         self.signaling.send(message).await
     }

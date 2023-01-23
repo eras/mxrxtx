@@ -21,6 +21,10 @@ impl TestSignaling {
 
 #[async_trait]
 impl Signaling for TestSignaling {
+    type PeerInfo = ();
+
+    async fn get_peer_info(&self) -> Self::PeerInfo {}
+
     async fn send(&mut self, message: Message) -> Result<(), anyhow::Error> {
         println!("{} sends a message {:?}", self.label, &message);
         self.tx

@@ -1,7 +1,7 @@
 use crate::{
     config, digest, level_event::LevelEvent, matrix_common, matrix_log,
-    matrix_signaling::MatrixSignalingRouter, progress_common, protocol, signaling::SignalingRouter,
-    transport, utils::escape,
+    matrix_signaling::MatrixSignalingRouter, progress_common, protocol, signaling::Signaling,
+    signaling::SignalingRouter, transfer_session::TransferSession, transport, utils::escape,
 };
 use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
@@ -12,8 +12,10 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
+use tokio::sync::Mutex;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -105,74 +107,77 @@ pub async fn transfer(
     Ok(())
 }
 
-// https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
-pub fn accepter_recurse(
-    exit_signal: LevelEvent,
+#[derive(Clone)]
+struct AccepterState {
     offer_files: Vec<protocol::File>,
-    signaling_router: MatrixSignalingRouter,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
     multi_progress: MultiProgress,
+    offer_session_state: Arc<Mutex<TransferSession>>,
+}
+
+// https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
+fn accepter_recurse(
+    accepter_state: AccepterState,
+    signaling_router: MatrixSignalingRouter,
 ) -> BoxFuture<'static, ()> {
     Box::pin(async move {
-        accepter(
-            exit_signal,
-            offer_files,
-            signaling_router,
-            ice_servers.clone(),
-            matrix_log,
-            multi_progress,
-        )
-        .await
-        // TODO: handle IO error when peer closes connection
-        .unwrap()
+        accepter(accepter_state, signaling_router)
+            .await
+            // TODO: handle IO error when peer closes connection
+            .unwrap()
     }) as BoxFuture<()>
 }
 
-pub async fn accepter(
-    exit_signal: LevelEvent,
-    offer_files: Vec<protocol::File>,
+async fn accepter(
+    mut accepter_state: AccepterState,
     mut signaling_router: MatrixSignalingRouter,
-    ice_servers: Vec<String>,
-    matrix_log: matrix_log::MatrixLog,
-    multi_progress: MultiProgress,
 ) -> Result<(), Error> {
+    let spawned_accepter_state = accepter_state.clone();
+    let AccepterState {
+        matrix_log,
+        multi_progress,
+        ice_servers,
+        offer_files,
+        offer_session_state,
+        ..
+    } = &mut accepter_state;
     let spinner =
-        progress_common::make_spinner(Some(&multi_progress)).with_finish(ProgressFinish::AndClear);
+        progress_common::make_spinner(Some(multi_progress)).with_finish(ProgressFinish::AndClear);
     matrix_log
         .log(Some(&spinner), "Waiting for new signaling peer")
         .await?;
     let signaling = signaling_router.accept().await.unwrap();
-    tokio::spawn({
-        let ice_servers = ice_servers.clone();
-        let exit_signal = exit_signal.clone();
-        let offer_files = offer_files.clone();
-        let matrix_log = matrix_log.clone();
-        let multi_progress = multi_progress.clone();
-        async move {
-            accepter_recurse(
-                exit_signal,
-                offer_files,
-                signaling_router,
-                ice_servers,
-                matrix_log,
-                multi_progress,
-            )
-            .await
-        }
-    });
+    let peer_info = signaling.get_peer_info().await;
+    tokio::spawn(async move { accepter_recurse(spawned_accepter_state, signaling_router).await });
     let mut transport =
         transport::Transport::new(signaling, ice_servers.iter().map(|x| x.as_str()).collect())?;
+    let peer = peer_info
+        .mxid
+        .map(|x| escape(x.as_ref()))
+        .unwrap_or_else(|| String::from("Unknown"));
     matrix_log
-        .log(Some(&spinner), "Accepting a connection")
+        .log(
+            Some(&spinner),
+            &format!("Accepting a connection from {peer}"),
+        )
         .await?;
     let cn = transport.accept().await?;
     matrix_log
-        .log(Some(&spinner), "Accepted a connection, transferring file")
+        .log(
+            Some(&spinner),
+            &format!("Accepted a connection, transferring file to {peer}"),
+        )
         .await?;
-    let progress = make_transfer_progress(&offer_files, Some(&multi_progress));
-    transfer(offer_files, cn, progress).await?;
-    matrix_log.log(None, "Transferring complete").await?;
+    let progress = make_transfer_progress(offer_files, Some(multi_progress));
+    offer_session_state.lock().await.inc_tranferring();
+    progress.set_prefix(format!("{peer} "));
+    let result = transfer(offer_files.to_vec(), cn, progress).await;
+    offer_session_state.lock().await.inc_complete();
+    result?;
+    matrix_log
+        .log(None, &format!("Transferring complete to {peer}"))
+        .await?;
     // debug!("Received ack, stopping");
     // transport.stop().await?;
     // info!("Transfer stopped");
@@ -267,33 +272,29 @@ pub async fn offer(
         }
     });
 
-    matrix_log
-        .log(
-            Some(&spinner),
-            &format!("Offer for {} started", escape(&uri.matrix_uri_string())),
-        )
-        .await?;
-
     let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 
     let signaling_router =
         MatrixSignalingRouter::new(client.clone(), device_id, event_id.clone()).await;
 
     tokio::spawn({
-        let exit_signal = exit_signal.clone();
         let matrix_log = matrix_log.clone();
         let multi_progress = multi_progress.clone();
-        async move {
-            accepter(
-                exit_signal,
-                offer_files,
-                signaling_router,
-                config.ice_servers,
-                matrix_log,
-                multi_progress,
+        matrix_log
+            .log(
+                Some(&spinner),
+                &format!("Offering {}", &uri.matrix_uri_string()),
             )
-            .await
-        }
+            .await?;
+        let offer_session_state = Arc::new(Mutex::new(TransferSession::new(&multi_progress)));
+        let accepter_state = AccepterState {
+            offer_files,
+            ice_servers: config.ice_servers,
+            matrix_log,
+            multi_progress,
+            offer_session_state,
+        };
+        async move { accepter(accepter_state, signaling_router).await }
     });
 
     select! {

@@ -9,7 +9,7 @@ pub fn make_transfer_progress(len: u64, multi: Option<&MultiProgress>) -> Progre
         progress
     };
     progress.
-	set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {speed} {eta}")
+	set_style(ProgressStyle::with_template("{spinner:.green} {prefix}[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {speed} {eta}")
 		  .unwrap()
 		  .with_key("speed",
 			    |state: &ProgressState, w: &mut dyn std::fmt::Write| {
