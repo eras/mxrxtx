@@ -36,7 +36,6 @@ async fn main() -> Result<(), Error> {
     let app = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
         .setting(clap::AppSettings::ArgRequiredElseHelp)
-        .before_help("Licensed under the MIT license")
         .version(version.as_str())
         .author("Erkki Seppälä <erkki.seppala@vincit.fi>")
         .about(
