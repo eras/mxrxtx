@@ -17,6 +17,10 @@ pub struct Config {
     pub state_dir: PathBuf,
     pub ice_servers: Vec<String>,
     pub log_room: Option<String>, // use this room for logging
+
+    // used for overriding homeserver of user_id in test setups
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homeserver: Option<String>,
 }
 
 #[derive(Error, Debug)]

@@ -63,6 +63,18 @@ async fn main() -> Result<(), Error> {
         .subcommand(
             clap::Command::new("setup")
                 .about("Run the initial setup")
+                .arg(
+                    clap::Arg::new("homeserver")
+                        .long("hs")
+                        .value_name("URL")
+                        .help("Override homeserver from mxid (for testing)"),
+                )
+                .arg(
+                    clap::Arg::new("skip-verify")
+                        .long("skip-verify")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Skip the verify phase"),
+                ),
         )
         .subcommand(
             clap::Command::new("verify")
@@ -143,13 +155,20 @@ async fn main() -> Result<(), Error> {
     }
 
     let config_file = setup::get_config_file(args.value_of("config"))?;
-    let config = config::Config::load(&config_file)?;
+    let mut config = config::Config::load(&config_file)?;
 
     let output_dir = args.value_of("output-dir").unwrap();
 
     println!("{info_string}");
     match args.subcommand() {
-        Some(("setup", _sub_args)) => setup::setup_mode(config, &config_file).await?,
+        Some(("setup", sub_args)) => {
+            let homeserver = sub_args.value_of("homeserver").map(|x| x.to_string());
+            if homeserver.is_some() {
+                config.homeserver = homeserver;
+            }
+            let skip_verify = sub_args.get_flag("skip-verify");
+            setup::setup_mode(config, &config_file, !skip_verify).await?
+        }
         Some(("monitor", monitor_args)) => {
             let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
             monitor::monitor(

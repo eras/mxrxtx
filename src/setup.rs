@@ -341,6 +341,7 @@ pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginR
 pub async fn setup_mode(
     mut config: config::Config,
     config_file: &str,
+    do_verify: bool,
 ) -> Result<(), Error> {
     if std::path::Path::new(config_file).exists() {
         return Err(Error::SetupError(format!(
@@ -352,10 +353,13 @@ pub async fn setup_mode(
 
     let user_id = <&matrix_sdk::ruma::UserId>::try_from(mxid.as_str())?.to_owned();
 
-    let client = Client::builder()
-        .server_name(user_id.server_name())
-        .build()
-        .await?;
+    let client = Client::builder();
+    let client = if let Some(hs) = &config.homeserver {
+        client.homeserver_url(hs)
+    } else {
+        client.server_name(user_id.server_name())
+    };
+    let client = client.build().await?;
 
     let login = make_login(&client, &user_id).await?;
     let device_id = login.device_id.clone();
@@ -379,16 +383,18 @@ pub async fn setup_mode(
 
     drop(client);
 
-    println!(
-        "Starting emoji verification. Press ^C to skip.\n\
-	 You may restart verification later with mxrxtx verify.\n\
-	 \n\
-	 Note that the initial sync can take a very long time. For me it takes 10 minutes.\n\
-	 \n\
-	 Don't start the verification before the message \"Ready for verification\" appears.",
-    );
+    if do_verify {
+        println!(
+            "Starting emoji verification. Press ^C to skip.\n\
+	     You may restart verification later with mxrxtx verify.\n\
+	     \n\
+	     Note that the initial sync can take a very long time. For me it takes 10 minutes.\n\
+	     \n\
+	     Don't start the verification before the message \"Ready for verification\" appears.",
+        );
 
-    crate::matrix_verify::verify(config.clone()).await?;
+        crate::matrix_verify::verify(config.clone()).await?;
+    }
 
     match prompt_log_room(&config).await {
         Ok(Some(log_room)) => {

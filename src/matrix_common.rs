@@ -206,8 +206,13 @@ pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
 
     let session = config.get_matrix_session()?;
 
-    let client = Client::builder()
-        .server_name(session.user_id.server_name())
+    let client = Client::builder();
+    let client = if let Some(hs) = &config.homeserver {
+        client.homeserver_url(hs)
+    } else {
+        client.server_name(session.user_id.server_name())
+    };
+    let client = client
         // account for slow homeservers..
         .request_config(RequestConfig::default().timeout(Duration::from_secs(120)))
         .sled_store(&config.state_dir, None)
