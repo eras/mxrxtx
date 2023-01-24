@@ -63,14 +63,10 @@ async fn main() -> Result<(), Error> {
         .subcommand(
             clap::Command::new("setup")
                 .about("Run the initial setup")
-                .help(
-                "Do setup (prompt matrix homeserver address, user account, password, setup e2ee)",
-            ),
         )
         .subcommand(
             clap::Command::new("verify")
-                .about("Run the emoji verification")
-                .help("Run the emoji verification (start verification from another session)"),
+                .about("Run the emoji verification (start verification from another session)"),
         )
         .subcommand(
             clap::Command::new("download")
