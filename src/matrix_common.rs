@@ -1,5 +1,5 @@
 use crate::{config, matrix_log, progress_common};
-use matrix_sdk::config::SyncSettings;
+use matrix_sdk::config::{RequestConfig, SyncSettings};
 use matrix_sdk::ruma::api::client::{filter, sync::sync_events};
 use matrix_sdk::ruma::OwnedDeviceId;
 use matrix_sdk::sync::SyncResponse;
@@ -206,16 +206,14 @@ pub async fn init(config: &config::Config) -> Result<MatrixInit, Error> {
 
     let session = config.get_matrix_session()?;
 
-    let sync_settings = SyncSettings::default()
-        .timeout(Duration::from_secs(120)) // account for slow homeservers..
-        // .filter(just_joined_rooms_filter())
-        // .full_state(true);
-	;
     let client = Client::builder()
         .server_name(session.user_id.server_name())
+        // account for slow homeservers..
+        .request_config(RequestConfig::default().timeout(Duration::from_secs(120)))
         .sled_store(&config.state_dir, None)
         .build()
         .await?;
+    let sync_settings = SyncSettings::default();
     let device_id = session.device_id.clone();
     spinner.set_message("Restore session");
     client.restore_session(session).await?;
