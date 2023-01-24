@@ -339,7 +339,6 @@ pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginR
 }
 
 pub async fn setup_mode(
-    _args: clap::ArgMatches,
     mut config: config::Config,
     config_file: &str,
 ) -> Result<(), Error> {

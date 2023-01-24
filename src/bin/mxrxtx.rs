@@ -153,7 +153,7 @@ async fn main() -> Result<(), Error> {
 
     println!("{info_string}");
     match args.subcommand() {
-        Some(("setup", _sub_args)) => setup::setup_mode(args, config, &config_file).await?,
+        Some(("setup", _sub_args)) => setup::setup_mode(config, &config_file).await?,
         Some(("monitor", monitor_args)) => {
             let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
             monitor::monitor(
