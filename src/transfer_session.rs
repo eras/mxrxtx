@@ -25,10 +25,11 @@ impl TransferSession {
         self.update_spinner();
     }
 
-    pub fn inc_complete(&mut self) {
+    pub fn inc_complete(&mut self) -> usize {
         self.num_complete += 1;
         self.num_transferring -= 1;
         self.update_spinner();
+        self.num_complete
     }
 
     pub fn update_spinner(&self) {

@@ -115,6 +115,8 @@ struct AccepterState {
     matrix_log: matrix_log::MatrixLog,
     multi_progress: MultiProgress,
     offer_session_state: Arc<Mutex<TransferSession>>,
+    max_transfers: Option<usize>,
+    exit_signal: LevelEvent,
 }
 
 // https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
@@ -130,6 +132,7 @@ fn accepter_recurse(
     }) as BoxFuture<()>
 }
 
+#[rustfmt::skip::macros(select)]
 async fn accepter(
     mut accepter_state: AccepterState,
     mut signaling_router: MatrixSignalingRouter,
@@ -141,7 +144,8 @@ async fn accepter(
         ice_servers,
         offer_files,
         offer_session_state,
-        ..
+        max_transfers,
+        exit_signal,
     } = &mut accepter_state;
     let spinner =
         progress_common::make_spinner(Some(multi_progress)).with_finish(ProgressFinish::AndClear);
@@ -173,9 +177,12 @@ async fn accepter(
     let progress = make_transfer_progress(offer_files, Some(multi_progress));
     offer_session_state.lock().await.inc_tranferring();
     progress.set_prefix(format!("{peer} "));
-    let result = transfer(offer_files.to_vec(), cn, progress).await;
-    offer_session_state.lock().await.inc_complete();
-    result?;
+    select! {
+        _exit = exit_signal.wait() => (),
+        result = transfer(offer_files.to_vec(), cn, progress) => {
+            result?;
+	}
+    }
     matrix_log
         .log(None, &format!("Transferring complete to {peer}"))
         .await?;
@@ -183,6 +190,15 @@ async fn accepter(
     // transport.stop().await?;
     // info!("Transfer stopped");
 
+    let num_transfers = offer_session_state.lock().await.inc_complete();
+    if let Some(max_transfers) = *max_transfers {
+        if num_transfers >= max_transfers {
+            matrix_log
+                .log(None, "All transfers used up, stopping")
+                .await?;
+            exit_signal.issue().await;
+        }
+    }
     Ok(())
 }
 
@@ -191,6 +207,7 @@ pub async fn offer(
     config: config::Config,
     room: &str,
     offer_files: Vec<&str>,
+    max_transfers: Option<usize>,
 ) -> Result<(), Error> {
     let matrix_common::MatrixInit {
         client,
@@ -295,6 +312,8 @@ pub async fn offer(
             matrix_log,
             multi_progress,
             offer_session_state,
+            max_transfers,
+            exit_signal: exit_signal.clone(),
         };
         async move { accepter(accepter_state, signaling_router).await }
     });
@@ -306,6 +325,9 @@ pub async fn offer(
 	}
     }
 
+    matrix_log
+        .log(None, "Offer stopping, redacting event")
+        .await?;
     room.redact(
         &event_id,
         None,

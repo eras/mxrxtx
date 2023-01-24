@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error(transparent)]
     MonitorError(#[from] monitor::Error),
+
+    #[error(transparent)]
+    ParseIntError(#[from] std::num::ParseIntError),
 }
 
 #[tokio::main]
@@ -115,6 +118,12 @@ async fn main() -> Result<(), Error> {
                         .value_name("FILE")
                         .min_values(1)
                         .help("Files to offer"),
+                )
+                .arg(
+                    clap::Arg::new("max")
+                        .long("max")
+                        .value_name("MAX")
+                        .help("Maximum number of completed uploads before exiting"),
                 ),
         )
         .subcommand(
@@ -196,8 +205,13 @@ async fn main() -> Result<(), Error> {
             let files_args: Vec<String> = offer_args
                 .values_of_t("files")
                 .expect("clap arguments should ensure this");
+            let max: Option<usize> = if let Some(value) = offer_args.value_of("max") {
+                Some(value.to_string().parse::<usize>()?)
+            } else {
+                None
+            };
             let files: Vec<&str> = files_args.iter().map(|x| x.as_str()).collect();
-            offer::offer(config, room, files).await?;
+            offer::offer(config, room, files, max).await?;
         }
         _ => {
             eprintln!("A subcommand is required. --help for help.");
