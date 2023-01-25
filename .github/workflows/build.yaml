@@ -6,9 +6,12 @@ jobs:
   notify_start:
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
+    env:
+      HAS_ROOM_ID: ${{ secrets.MATRIX_ROOM_ID }}
     steps:
       - name: Build started notification
         uses: s3krit/matrix-message-action@v0.0.3
+        if: ${{ env.HAS_ROOM_ID }}
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
@@ -60,9 +63,12 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ success() }}
     needs: [notify_start, build]
+    env:
+      HAS_ROOM_ID: ${{ secrets.MATRIX_ROOM_ID }}
     steps:
       - name: Build succeeded notification
         uses: s3krit/matrix-message-action@v0.0.3
+        if: ${{ env.HAS_ROOM_ID }}
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
@@ -72,9 +78,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [notify_start, build]
     if: ${{ failure() }}
+    env:
+      HAS_ROOM_ID: ${{ secrets.MATRIX_ROOM_ID }}
     steps:
       - name: Build failed notification
         uses: s3krit/matrix-message-action@v0.0.3
+        if: ${{ env.HAS_ROOM_ID }}
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
