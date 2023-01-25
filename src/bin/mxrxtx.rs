@@ -55,14 +55,6 @@ async fn main() -> Result<(), Error> {
                 .value_name("FILE")
                 .help(config_help.as_str()),
         )
-        .arg(
-            clap::Arg::new("output-dir")
-                .long("output")
-                .short('O')
-                .value_name("DIRECTORY")
-                .default_value(".")
-                .help("Directory to use for downloading, defaults to ."),
-        )
         .subcommand(
             clap::Command::new("setup")
                 .about("Run the initial setup")
@@ -93,9 +85,17 @@ async fn main() -> Result<(), Error> {
                         .value_name("URL")
                         .help(
                             "Download files offered by a given Matrix event, given as a matrix: \
-			  or https://matrix.to url",
+			     or https://matrix.to url",
                         ),
-                ),
+                )
+		.arg(
+		    clap::Arg::new("output-dir")
+			.long("output")
+			.short('O')
+			.value_name("DIRECTORY")
+			.default_value(".")
+			.help("Directory to use for downloading, defaults to ."),
+		)
         )
         .subcommand(
             clap::Command::new("offer")
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Error> {
                         .index(1)
                         .help(
                             "Monitor listed rooms for offers and download them when they appear; \
-			  if no rooms listed, monitor all.",
+			     if no rooms listed, monitor all.",
                         ),
                 )
                 .arg(
@@ -147,7 +147,16 @@ async fn main() -> Result<(), Error> {
                         .long("max")
                         .value_name("MAX")
                         .help("Maximum number of completed downloads before exiting"),
-                ),
+                )
+		.arg(
+		    clap::Arg::new("output-dir")
+			.long("output")
+			.short('O')
+			.value_name("DIRECTORY")
+			.default_value(".")
+			.help("Directory to use for downloading, defaults to ."),
+		)
+
         )
         .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"));
     let info_string = app.render_long_version().trim().to_string();
@@ -172,8 +181,6 @@ async fn main() -> Result<(), Error> {
     let config_file = setup::get_config_file(args.value_of("config"))?;
     let mut config = config::Config::load(&config_file)?;
 
-    let output_dir = args.value_of("output-dir").unwrap();
-
     println!("{info_string}");
     match args.subcommand() {
         Some(("setup", sub_args)) => {
@@ -185,6 +192,7 @@ async fn main() -> Result<(), Error> {
             setup::setup_mode(config, &config_file, !skip_verify).await?
         }
         Some(("monitor", monitor_args)) => {
+	    let output_dir = monitor_args.value_of("output-dir").unwrap();
             let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
             let max: Option<usize> = if let Some(value) = monitor_args.value_of("max") {
                 Some(value.to_string().parse::<usize>()?)
@@ -203,6 +211,7 @@ async fn main() -> Result<(), Error> {
             matrix_verify::verify(config).await?;
         }
         Some(("download", download_args)) => {
+	    let output_dir = download_args.value_of("output-dir").unwrap();
             let args: Vec<String> = download_args
                 .values_of_t("url")
                 .expect("clap arguments should ensure this");
