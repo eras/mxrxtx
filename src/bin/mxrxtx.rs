@@ -141,6 +141,12 @@ async fn main() -> Result<(), Error> {
                             "Monitor listed rooms for offers and download them when they appear; \
 			  if no rooms listed, monitor all.",
                         ),
+                )
+                .arg(
+                    clap::Arg::new("max")
+                        .long("max")
+                        .value_name("MAX")
+                        .help("Maximum number of completed downloads before exiting"),
                 ),
         )
         .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"));
@@ -180,10 +186,16 @@ async fn main() -> Result<(), Error> {
         }
         Some(("monitor", monitor_args)) => {
             let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
+            let max: Option<usize> = if let Some(value) = monitor_args.value_of("max") {
+                Some(value.to_string().parse::<usize>()?)
+            } else {
+                None
+            };
             monitor::monitor(
                 config,
                 output_dir,
                 if rooms.is_empty() { None } else { Some(rooms) },
+		max
             )
             .await?;
         }

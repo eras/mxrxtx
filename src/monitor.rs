@@ -50,6 +50,8 @@ struct Setup {
     matrix_log: matrix_log::MatrixLog,
     multi_progress: MultiProgress,
     transfer_session: TransferSession,
+    max_transfers: Option<usize>,
+    exit_signal: LevelEvent,
 }
 
 struct Monitor {
@@ -62,6 +64,8 @@ struct Monitor {
     matrix_log: Arc<Mutex<matrix_log::MatrixLog>>,
     multi_progress: MultiProgress,
     transfer_session: Arc<Mutex<TransferSession>>,
+    max_transfers: Option<usize>,
+    exit_signal: LevelEvent,
 }
 
 impl Monitor {
@@ -83,6 +87,8 @@ impl Monitor {
             matrix_log,
             multi_progress: setup.multi_progress,
             transfer_session: Arc::new(Mutex::new(setup.transfer_session)),
+	    max_transfers: setup.max_transfers,
+	    exit_signal: setup.exit_signal,
         }));
         // TODO: remove added event handlers on Drop
         setup.client.add_event_handler({
@@ -165,6 +171,8 @@ impl Monitor {
             let multi_progress = self.multi_progress.clone();
             let peer_user_id = peer_user_id.clone();
             let transfer_session = self.transfer_session.clone();
+	    let max_transfers = self.max_transfers;
+	    let exit_signal = self.exit_signal.clone();
             async move {
                 let matrix_log = matrix_log.clone();
                 {
@@ -188,7 +196,6 @@ impl Monitor {
                 )
                 .await;
                 {
-                    transfer_session.lock().await.inc_complete();
                     let matrix_log = matrix_log.lock().await;
                     // TODO: handle errors
                     let _ignore = matrix_log
@@ -197,6 +204,19 @@ impl Monitor {
                             &format!("Downloading of event {} finished: {:?}", event_id, status),
                         )
                         .await;
+		    let num_complete = transfer_session.lock().await.inc_complete();
+		    if let Some(max_transfers) = &max_transfers {
+			if num_complete >= *max_transfers {
+			    // TODO: handle errors
+			    let _ignore = matrix_log
+				.log(
+				    None,
+				    "Maximum number of transfers reached, exiting",
+				)
+				.await;
+			    exit_signal.issue().await;
+			}
+		    }
                 }
             }
         });
@@ -209,6 +229,7 @@ pub async fn monitor(
     config: config::Config,
     output_dir: &str,
     rooms: Option<Vec<String>>,
+    max_transfers: Option<usize>,
 ) -> Result<(), Error> {
     let matrix_common::MatrixInit {
         client,
@@ -259,6 +280,8 @@ pub async fn monitor(
         matrix_log: matrix_log.clone(),
         multi_progress: multi,
         transfer_session,
+	max_transfers,
+	exit_signal: exit_signal.clone(),
     });
     select! {
     	_exit = exit_signal.wait() => (),
