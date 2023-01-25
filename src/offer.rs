@@ -1,10 +1,17 @@
 use crate::{
-    config, digest, level_event::LevelEvent, matrix_common, matrix_log,
-    matrix_signaling::MatrixSignalingRouter, progress_common, protocol, signaling::Signaling,
-    signaling::SignalingRouter, transfer_session::TransferSession, transport, utils::escape,
+    config, digest,
+    level_event::LevelEvent,
+    matrix_common, matrix_log,
+    matrix_signaling::{MatrixSignalingRouter, MatrixSignalingSingle},
+    progress_common, protocol,
+    signaling::Signaling,
+    signaling::SignalingRouter,
+    transfer_session::TransferSession,
+    transport,
+    utils::escape,
     version::get_version,
 };
-use futures::{future::BoxFuture, AsyncReadExt, AsyncWriteExt};
+use futures::{AsyncReadExt, AsyncWriteExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use matrix_sdk::config::SyncSettings;
 use sha2::{Digest, Sha512};
@@ -16,6 +23,7 @@ use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
+use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 #[allow(unused_imports)]
@@ -119,25 +127,13 @@ struct AccepterState {
     exit_signal: LevelEvent,
 }
 
-// https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
-fn accepter_recurse(
-    accepter_state: AccepterState,
-    signaling_router: MatrixSignalingRouter,
-) -> BoxFuture<'static, ()> {
-    Box::pin(async move {
-        accepter(accepter_state, signaling_router)
-            .await
-            // TODO: handle IO error when peer closes connection
-            .unwrap()
-    }) as BoxFuture<()>
-}
+// ⛼ Removed here code for doing recursion with async functions, as per https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
 
-#[rustfmt::skip::macros(select)]
-async fn accepter(
+async fn handle_accept(
+    signaling: MatrixSignalingSingle,
     mut accepter_state: AccepterState,
-    mut signaling_router: MatrixSignalingRouter,
+    spinner: ProgressBar,
 ) -> Result<(), Error> {
-    let spawned_accepter_state = accepter_state.clone();
     let AccepterState {
         matrix_log,
         multi_progress,
@@ -147,14 +143,7 @@ async fn accepter(
         max_transfers,
         exit_signal,
     } = &mut accepter_state;
-    let spinner =
-        progress_common::make_spinner(Some(multi_progress)).with_finish(ProgressFinish::AndClear);
-    matrix_log
-        .log(Some(&spinner), "Waiting for new signaling peer")
-        .await?;
-    let signaling = signaling_router.accept().await.unwrap();
     let peer_info = signaling.get_peer_info().await;
-    tokio::spawn(async move { accepter_recurse(spawned_accepter_state, signaling_router).await });
     let mut transport =
         transport::Transport::new(signaling, ice_servers.iter().map(|x| x.as_str()).collect())?;
     let peer = peer_info
@@ -199,6 +188,75 @@ async fn accepter(
             exit_signal.issue().await;
         }
     }
+    Ok(())
+}
+
+#[rustfmt::skip::macros(select)]
+async fn accepter(
+    accepter_state: AccepterState,
+    mut signaling_router: MatrixSignalingRouter,
+) -> Result<(), Error> {
+    let (finished_send, mut finished_recv) = mpsc::unbounded_channel();
+    let matrix_log = &accepter_state.matrix_log;
+    let multi_progress = &accepter_state.multi_progress;
+    let top_spinner = progress_common::make_spinner(Some(multi_progress))
+	.with_finish(ProgressFinish::AndClear);
+    matrix_log
+        .log(Some(&top_spinner), "Waiting for new signaling peer")
+        .await?;
+    loop {
+	let signaling = select! {
+	    _done = accepter_state.exit_signal.wait() => {
+		break;
+	    }
+	    retvalue = finished_recv.recv() => {
+		match retvalue {
+		    Some(Ok(())) => {
+			// everything went great!
+			None
+		    }
+		    None => {
+			// what? exit.
+			error!("Unexpected closing of finished_recv");
+			break;
+		    }
+		    Some(Err(error)) => {
+			matrix_log
+			    .log(None, &format!("Error from accepter: {error:?}"))
+			    .await?;
+			None
+		    }
+		}
+	    }
+	    signaling = signaling_router.accept() => {
+		match signaling {
+		    Ok(signaling) => {
+			Some(signaling)
+		    }
+		    Err(error) => {
+			matrix_log
+			    .log(None, &format!("Error from signaling: {error:?}"))
+			    .await?;
+			None
+		    }
+		}
+	    }
+	};
+
+	if let Some(signaling) = signaling {
+            tokio::spawn({
+		let spinner = progress_common::make_spinner(Some(multi_progress))
+		    .with_finish(ProgressFinish::AndClear);
+		let accepter_state = accepter_state.clone();
+		let finished_send = finished_send.clone();
+		async move {
+                    let result = handle_accept(signaling, accepter_state, spinner).await;
+                    let _ignore_error = finished_send.send(result);
+		}
+            });
+	}
+    }
+
     Ok(())
 }
 
