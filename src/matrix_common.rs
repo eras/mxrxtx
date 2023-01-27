@@ -86,7 +86,7 @@ pub(crate) fn just_joined_rooms_filter() -> sync_events::v3::Filter {
 }
 
 fn room_strings(rooms: &[&Joined]) -> Vec<String> {
-    rooms.iter().map(|x| format!("{:?}", x)).collect()
+    rooms.iter().map(|x| format!("{x:?}")).collect()
 }
 
 pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Result<Joined, Error> {

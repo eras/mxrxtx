@@ -81,7 +81,7 @@ impl Config {
             Err(error) if error.line_col().is_some() => {
                 return Err(Error::ParseError(ParseError {
                     filename: String::from(filename),
-                    message: format!("{}", error),
+                    message: format!("{error}"),
                 }));
             }
             Err(error) => return Err(Error::TomlDeError(error)),

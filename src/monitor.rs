@@ -201,7 +201,7 @@ impl Monitor {
                     let _ignore = matrix_log
                         .log(
                             None,
-                            &format!("Downloading of event {} finished: {:?}", event_id, status),
+                            &format!("Downloading of event {event_id} finished: {status:?}"),
                         )
                         .await;
 		    let num_complete = transfer_session.lock().await.inc_complete();
