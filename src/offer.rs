@@ -25,6 +25,7 @@ use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
+use tracing::{event, Level, instrument};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -67,52 +68,75 @@ pub fn make_transfer_progress(
     progress_common::make_transfer_progress(size, multi)
 }
 
+#[rustfmt::skip::macros(select)]
+#[instrument(skip_all)]
 pub async fn transfer(
     offer_files: Vec<protocol::File>,
     mut cn: transport::DataStream,
     progress: ProgressBar,
+    cancel: CancellationToken,
 ) -> Result<(), Error> {
+    let mut abort = false;
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut total_bytes = 0;
+    event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
     for offer_file in offer_files {
         let mut file = File::open(Path::new(&offer_file.name))?;
         let mut eof = false;
         let file_size = offer_file.size as usize;
         let mut sent_file_bytes = 0usize;
         let mut hasher = Sha512::new();
-        while !eof && sent_file_bytes < file_size {
+        while !eof && sent_file_bytes < file_size && !cancel.is_cancelled() {
             let read_bytes = cmp::min(file_size - sent_file_bytes, buffer.len());
             let n = file.read(&mut buffer[0..read_bytes])?;
             progress.inc(n as u64);
             if n == 0 {
                 eof = true;
             } else {
-                cn.write_all(&buffer[0..n]).await?;
-                hasher.update(&buffer[0..n]);
-                total_bytes += n;
-                sent_file_bytes += n;
+		select! {
+		    _ = cancel.cancelled() => {
+			event!(Level::TRACE, "Cancelled");
+		    },
+		    result = cn.write_all(&buffer[0..n]) => {
+			result?;
+			hasher.update(&buffer[0..n]);
+			total_bytes += n;
+			sent_file_bytes += n;
+		    }
+		}
             }
         }
-        if sent_file_bytes < file_size {
-            error!(
-                "File {file} finished prematurely, aborting transfer",
-                file = escape(&offer_file.name)
-            );
-            break;
-        }
-        if let Some(hash) = offer_file.hashes.get("sha512") {
-            if hasher.finalize().to_vec() != hash.as_bytes() {
-                error!(
-                    "File {file} was changed during transfer (hash changed), aborting",
+	if cancel.is_cancelled() {
+	    abort = true;
+	} else {
+            if sent_file_bytes < file_size {
+		abort = true;
+		error!(
+                    "File {file} finished prematurely, aborting transfer",
                     file = escape(&offer_file.name)
-                );
-                break;
+		);
+		break;
             }
-        }
+            if let Some(hash) = offer_file.hashes.get("sha512") {
+		if hasher.finalize().to_vec() != hash.as_bytes() {
+		    abort = true;
+                    error!(
+			"File {file} was changed during transfer (hash changed), aborting",
+			file = escape(&offer_file.name)
+                    );
+                    break;
+		}
+            }
+	}
     }
-    debug!("Wrote {total_bytes}, waiting ack");
-    progress.set_message("Waiting ACK");
-    cn.read_exact(&mut buffer[0..2]).await?;
+    if !abort {
+	debug!("Wrote {total_bytes}, waiting ack");
+	progress.set_message("Waiting ACK");
+	cn.read_exact(&mut buffer[0..2]).await?;
+    } else {
+	debug!("Transfer aborted");
+    }
+    event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
     Ok(())
 }
 
@@ -129,6 +153,7 @@ struct AccepterState {
 
 // ⛼ Removed here code for doing recursion with async functions, as per https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
 
+#[instrument(skip_all)]
 async fn handle_accept(
     signaling: MatrixSignalingSingle,
     mut accepter_state: AccepterState,
@@ -166,11 +191,23 @@ async fn handle_accept(
     let progress = make_transfer_progress(offer_files, Some(multi_progress));
     offer_session_state.lock().await.inc_tranferring();
     progress.set_prefix(format!("{peer} "));
-    select! {
-        _exit = cancel.cancelled() => (),
-        result = transfer(offer_files.to_vec(), cn, progress) => {
-            result?;
-	}
+    let transfer_task = tokio::spawn({
+	let cancel = cancel.clone();
+	let offer_files = offer_files.clone();
+	async move {
+	    transfer(offer_files.to_vec(), cn, progress, cancel).await
+	}}
+    );
+    let result =
+	select! {
+            _exit = cancel.cancelled() => None,
+            result = transfer_task => {
+		event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
+		Some(result.unwrap()) // TODO: error handling?
+	    }
+	};
+    if let Some(result) = result {
+	result?;
     }
     matrix_log
         .log(None, &format!("Transferring complete to {peer}"))
@@ -188,6 +225,7 @@ async fn handle_accept(
             cancel.cancel();
         }
     }
+    event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
     Ok(())
 }
 
@@ -211,7 +249,7 @@ async fn accepter(
 	    }
 	    retvalue = finished_recv.recv() => {
 		match retvalue {
-		    Some(Ok(())) => {
+		    Some(Ok(_)) => {
 			// everything went great!
 			None
 		    }
@@ -256,11 +294,13 @@ async fn accepter(
             });
 	}
     }
+    event!(Level::TRACE, is_cancelled=accepter_state.cancel.is_cancelled());
 
     Ok(())
 }
 
 #[rustfmt::skip::macros(select)]
+#[instrument(skip_all)]
 pub async fn offer(
     config: config::Config,
     room: &str,
@@ -338,12 +378,13 @@ pub async fn offer(
         None,
     )?;
 
-    let cancel = CancellationToken::new();
+    let master_cancel = CancellationToken::new();
+    let cancel = master_cancel.clone();
     tokio::spawn({
-        let cancel = cancel.clone();
         let matrix_log = matrix_log.clone();
 	let spinner = spinner.clone();
         async move {
+	    let _cancel_guard = master_cancel.drop_guard();
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to listen for ctrl-c");
@@ -353,7 +394,6 @@ pub async fn offer(
                     "Stopping due to SIGINT",
 		)
 		.await;
-            cancel.cancel();
         }
     });
 
@@ -381,7 +421,9 @@ pub async fn offer(
             max_transfers,
             cancel: cancel.clone(),
         };
-        async move { accepter(accepter_state, signaling_router).await }
+        async move {
+	    accepter(accepter_state, signaling_router).await
+	}
     });
 
     select! {

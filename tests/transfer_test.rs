@@ -12,6 +12,7 @@ use std::{
 };
 use tempdir::TempDir;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 fn compare_directories(path1: &Path, path2: &Path) -> Result<(), ()> {
     // Get the list of entries in the first directory
@@ -90,6 +91,7 @@ async fn transfer_file() {
                 offer_content.files,
                 transport.accept().await.unwrap(),
                 progress,
+		CancellationToken::new(),
             )
             .await
             .map_err(anyhow::Error::from)
