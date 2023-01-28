@@ -3,6 +3,7 @@ use crate::{
     matrix_signaling::{MatrixSignaling, SessionInfo},
     progress_common, protocol, transport,
     utils::{escape, escape_paths},
+    digest::file_sha512,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
 use indicatif::MultiProgress;
@@ -139,13 +140,42 @@ pub async fn transfer(
     multi: Option<&MultiProgress>,
     prefix: &str,
 ) -> Result<(), Error> {
+    let files = &offer_content.files;
+    let path_for_file = |file_name: &str| -> Result<PathBuf, Error> {
+	let mut path = PathBuf::from(&output_dir);
+	path.push(escape_paths(file_name));
+	Ok(path)
+    };
+    let multi = if let Some(multi) = multi {
+        multi.clone()
+    } else {
+        MultiProgress::new()
+    };
+    let mut has_all_files = true;
+    for offer_file in files {
+	if let Some(expected) = offer_file.hashes.get("sha512") {
+	    match file_sha512(&path_for_file(&offer_file.name)?, Some(&multi)) {
+		Ok((sha512, _size)) => {
+		    if sha512 != *expected {
+			has_all_files = false;
+		    }
+		}
+		Err(_) => {
+		    has_all_files = false;
+		}
+	    }
+	}
+    }
+    if has_all_files {
+	info!("File already downloaded completely, skipping");
+	return Ok(())
+    }
     debug!("Connecting!");
     let mut cn = transport.connect().await?;
     debug!("Connected!");
     let mut buffer: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
     let mut eof = false;
     let mut received_bytes = 0;
-    let files = &offer_content.files;
     let expected_bytes = files.iter().map(|x| x.size as usize).sum();
     let mut file_idx = 0usize;
     let mut file_offset = 0usize;
@@ -163,11 +193,6 @@ pub async fn transfer(
                 }
             }
         }
-    };
-    let multi = if let Some(multi) = multi {
-        multi.clone()
-    } else {
-        MultiProgress::new()
     };
     let overall_progress =
         progress_common::make_transfer_progress(expected_bytes as u64, Some(&multi));
@@ -197,9 +222,7 @@ pub async fn transfer(
             } else {
                 let write_bytes = cmp::min(cur_bytes_remaining, n);
                 if cur_file_hasher.is_none() {
-                    let mut path = PathBuf::from(&output_dir);
-                    path.push(escape_paths(&files[file_idx].name));
-                    let file = BufWriter::new(File::create(&path)?);
+		    let file = BufWriter::new(File::create(&path_for_file(&files[file_idx].name)?)?);
                     let hasher = Sha512::new();
                     cur_file_hasher = Some((file, hasher));
                 }
