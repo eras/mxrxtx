@@ -15,7 +15,7 @@ pub enum Error {
 }
 
 pub fn file_sha512(file: &Path, multi: Option<&MultiProgress>) -> Result<(Base64, u64), Error> {
-    let file = File::open(file).unwrap();
+    let file = File::open(file)?;
     let file_size = file.metadata()?.len();
     let progress = progress_common::make_transfer_progress(file_size, multi);
     let mut size = 0u64;
