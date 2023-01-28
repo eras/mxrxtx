@@ -1,6 +1,5 @@
 use crate::{
     config, download,
-    level_event::LevelEvent,
     matrix_common, matrix_log,
     matrix_signaling::{MatrixSignaling, SessionInfo},
     progress_common, protocol,
@@ -19,6 +18,7 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -51,7 +51,7 @@ struct Setup {
     multi_progress: MultiProgress,
     transfer_session: TransferSession,
     max_transfers: Option<usize>,
-    exit_signal: LevelEvent,
+    cancel: CancellationToken,
 }
 
 struct Monitor {
@@ -65,7 +65,7 @@ struct Monitor {
     multi_progress: MultiProgress,
     transfer_session: Arc<Mutex<TransferSession>>,
     max_transfers: Option<usize>,
-    exit_signal: LevelEvent,
+    cancel: CancellationToken,
 }
 
 impl Monitor {
@@ -88,7 +88,7 @@ impl Monitor {
             multi_progress: setup.multi_progress,
             transfer_session: Arc::new(Mutex::new(setup.transfer_session)),
 	    max_transfers: setup.max_transfers,
-	    exit_signal: setup.exit_signal,
+	    cancel: setup.cancel,
         }));
         // TODO: remove added event handlers on Drop
         setup.client.add_event_handler({
@@ -172,7 +172,7 @@ impl Monitor {
             let peer_user_id = peer_user_id.clone();
             let transfer_session = self.transfer_session.clone();
 	    let max_transfers = self.max_transfers;
-	    let exit_signal = self.exit_signal.clone();
+	    let cancel = self.cancel.clone();
             async move {
                 let matrix_log = matrix_log.clone();
                 {
@@ -214,7 +214,7 @@ impl Monitor {
 				    "Maximum number of transfers reached, exiting",
 				)
 				.await;
-			    exit_signal.issue().await;
+			    cancel.cancel();
 			}
 		    }
                 }
@@ -260,14 +260,14 @@ pub async fn monitor(
     matrix_log.log(Some(&spinner), "Monitoring offers").await?;
     let transfer_session = TransferSession::new(&multi);
 
-    let exit_signal = LevelEvent::new();
+    let cancel = CancellationToken::new();
     tokio::spawn({
-        let exit_signal = exit_signal.clone();
+        let cancel = cancel.clone();
         async move {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to listen for ctrl-c");
-            exit_signal.issue().await;
+            cancel.cancel();
         }
     });
 
@@ -281,10 +281,10 @@ pub async fn monitor(
         multi_progress: multi,
         transfer_session,
 	max_transfers,
-	exit_signal: exit_signal.clone(),
+	cancel: cancel.clone(),
     });
     select! {
-    	_exit = exit_signal.wait() => (),
+    	_exit = cancel.cancelled() => (),
 	done2 = results.recv() => {
 	    done2.unwrap_or(Err(Error::InternalError(
                 "Failed to read results channel".to_string(),

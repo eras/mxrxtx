@@ -1,6 +1,5 @@
 use crate::{
     config, digest,
-    level_event::LevelEvent,
     matrix_common, matrix_log,
     matrix_signaling::{MatrixSignalingRouter, MatrixSignalingSingle},
     progress_common, protocol,
@@ -25,6 +24,7 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -124,7 +124,7 @@ struct AccepterState {
     multi_progress: MultiProgress,
     offer_session_state: Arc<Mutex<TransferSession>>,
     max_transfers: Option<usize>,
-    exit_signal: LevelEvent,
+    cancel: CancellationToken,
 }
 
 // ⛼ Removed here code for doing recursion with async functions, as per https://github.com/rust-lang/rust/issues/78649#issuecomment-1264353351
@@ -141,7 +141,7 @@ async fn handle_accept(
         offer_files,
         offer_session_state,
         max_transfers,
-        exit_signal,
+        cancel,
     } = &mut accepter_state;
     let peer_info = signaling.get_peer_info().await;
     let mut transport =
@@ -167,7 +167,7 @@ async fn handle_accept(
     offer_session_state.lock().await.inc_tranferring();
     progress.set_prefix(format!("{peer} "));
     select! {
-        _exit = exit_signal.wait() => (),
+        _exit = cancel.cancelled() => (),
         result = transfer(offer_files.to_vec(), cn, progress) => {
             result?;
 	}
@@ -185,7 +185,7 @@ async fn handle_accept(
             matrix_log
                 .log(None, "All transfers used up, stopping")
                 .await?;
-            exit_signal.issue().await;
+            cancel.cancel();
         }
     }
     Ok(())
@@ -206,7 +206,7 @@ async fn accepter(
         .await?;
     loop {
 	let signaling = select! {
-	    _done = accepter_state.exit_signal.wait() => {
+	    _done = accepter_state.cancel.cancelled() => {
 		break;
 	    }
 	    retvalue = finished_recv.recv() => {
@@ -338,14 +338,22 @@ pub async fn offer(
         None,
     )?;
 
-    let exit_signal = LevelEvent::new();
+    let cancel = CancellationToken::new();
     tokio::spawn({
-        let exit_signal = exit_signal.clone();
+        let cancel = cancel.clone();
+        let matrix_log = matrix_log.clone();
+	let spinner = spinner.clone();
         async move {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to listen for ctrl-c");
-            exit_signal.issue().await;
+	    let _ignore = matrix_log
+		.log(
+                    Some(&spinner),
+                    "Stopping due to SIGINT",
+		)
+		.await;
+            cancel.cancel();
         }
     });
 
@@ -371,20 +379,20 @@ pub async fn offer(
             multi_progress,
             offer_session_state,
             max_transfers,
-            exit_signal: exit_signal.clone(),
+            cancel: cancel.clone(),
         };
         async move { accepter(accepter_state, signaling_router).await }
     });
 
     select! {
-    	_exit = exit_signal.wait() => (),
+    	_exit = cancel.cancelled() => (),
     	done = client.sync(sync_settings) => {
 	    done?;
 	}
     }
 
     matrix_log
-        .log(None, "Offer stopping, redacting event")
+        .log(Some(&spinner), "Offer stopping, redacting event")
         .await?;
     room.redact(
         &event_id,
