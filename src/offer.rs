@@ -17,8 +17,8 @@ use sha2::{Digest, Sha512};
 use std::cmp;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::Read;
 use std::path::Path;
+use std::io::{Read, BufReader};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
@@ -68,6 +68,8 @@ pub fn make_transfer_progress(
     progress_common::make_transfer_progress(size, multi)
 }
 
+const BLOCK_SIZE: usize = 1usize << 16;
+
 #[rustfmt::skip::macros(select)]
 #[instrument(skip_all)]
 pub async fn transfer(
@@ -77,11 +79,11 @@ pub async fn transfer(
     cancel: CancellationToken,
 ) -> Result<(), Error> {
     let mut abort = false;
-    let mut buffer: [u8; 1024] = [0; 1024];
+    let mut buffer: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
     let mut total_bytes = 0;
     event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
     for offer_file in offer_files {
-        let mut file = File::open(Path::new(&offer_file.name))?;
+	let mut file = BufReader::new(File::open(offer_file.name.clone())?);
         let mut eof = false;
         let file_size = offer_file.size as usize;
         let mut sent_file_bytes = 0usize;

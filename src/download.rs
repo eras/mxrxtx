@@ -12,7 +12,7 @@ use sha2::{Digest, Sha512};
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Write, BufWriter};
 use std::path::PathBuf;
 use std::str::FromStr;
 use thiserror::Error;
@@ -130,6 +130,8 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
     Ok(event_id)
 }
 
+const BLOCK_SIZE: usize = 1usize << 16;
+
 pub async fn transfer(
     output_dir: String,
     mut transport: transport::Transport,
@@ -140,15 +142,15 @@ pub async fn transfer(
     debug!("Connecting!");
     let mut cn = transport.connect().await?;
     debug!("Connected!");
-    let mut buffer: [u8; 1024] = [0; 1024];
+    let mut buffer: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
     let mut eof = false;
     let mut received_bytes = 0;
     let files = &offer_content.files;
     let expected_bytes = files.iter().map(|x| x.size as usize).sum();
     let mut file_idx = 0usize;
     let mut file_offset = 0usize;
-    let mut cur_file_hasher: Option<(File, Sha512)> = None;
-    let finalize_file = |file_idx: usize, cur_file_hasher: Option<(File, Sha512)>| {
+    let mut cur_file_hasher: Option<(BufWriter<File>, Sha512)> = None;
+    let finalize_file = |file_idx: usize, cur_file_hasher: Option<(BufWriter<File>, Sha512)>| {
         if let Some((_, hasher)) = cur_file_hasher {
             if let Some(expected) = files[file_idx].hashes.get("sha512") {
                 let result = hasher.finalize();
@@ -197,7 +199,7 @@ pub async fn transfer(
                 if cur_file_hasher.is_none() {
                     let mut path = PathBuf::from(&output_dir);
                     path.push(escape_paths(&files[file_idx].name));
-                    let file = File::create(&path)?;
+                    let file = BufWriter::new(File::create(&path)?);
                     let hasher = Sha512::new();
                     cur_file_hasher = Some((file, hasher));
                 }
