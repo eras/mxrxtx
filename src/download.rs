@@ -133,8 +133,23 @@ fn get_event_id_from_uri(uri: &matrix_uri::MatrixUri) -> Result<OwnedEventId, Er
 
 const BLOCK_SIZE: usize = 1usize << 16;
 
+#[derive(Clone)]
+pub struct Options {
+    pub output_dir: String,
+    pub skip_existing: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+	Options {
+	    output_dir: "".to_string(),
+	    skip_existing: true,
+	}
+    }
+}
+
 pub async fn transfer(
-    output_dir: String,
+    options: Options,
     mut transport: transport::Transport,
     offer_content: protocol::OfferContent,
     multi: Option<&MultiProgress>,
@@ -142,7 +157,7 @@ pub async fn transfer(
 ) -> Result<(), Error> {
     let files = &offer_content.files;
     let path_for_file = |file_name: &str| -> Result<PathBuf, Error> {
-	let mut path = PathBuf::from(&output_dir);
+	let mut path = PathBuf::from(&options.output_dir);
 	path.push(escape_paths(file_name));
 	Ok(path)
     };
@@ -151,24 +166,26 @@ pub async fn transfer(
     } else {
         MultiProgress::new()
     };
-    let mut has_all_files = true;
-    for offer_file in files {
-	if let Some(expected) = offer_file.hashes.get("sha512") {
-	    match file_sha512(&path_for_file(&offer_file.name)?, Some(&multi)) {
-		Ok((sha512, _size)) => {
-		    if sha512 != *expected {
+    if options.skip_existing {
+	let mut has_all_files = true;
+	for offer_file in files {
+	    if let Some(expected) = offer_file.hashes.get("sha512") {
+		match file_sha512(&path_for_file(&offer_file.name)?, Some(&multi)) {
+		    Ok((sha512, _size)) => {
+			if sha512 != *expected {
+			    has_all_files = false;
+			}
+		    }
+		    Err(_) => {
 			has_all_files = false;
 		    }
 		}
-		Err(_) => {
-		    has_all_files = false;
-		}
 	    }
 	}
-    }
-    if has_all_files {
-	info!("File already downloaded completely, skipping");
-	return Ok(())
+	if has_all_files {
+	    info!("File already downloaded completely, skipping");
+	    return Ok(())
+	}
     }
     debug!("Connecting!");
     let mut cn = transport.connect().await?;
@@ -255,7 +272,7 @@ pub async fn transfer(
 pub async fn download(
     config: config::Config,
     urls: Vec<&str>,
-    output_dir: &str,
+    options: Options,
 ) -> Result<(), Error> {
     let matrix_common::MatrixInit {
         client, device_id, ..
@@ -312,8 +329,7 @@ pub async fn download(
     )?;
 
     let download_task = tokio::spawn({
-        let output_dir = String::from(output_dir);
-        async move { transfer(output_dir, transport, offer_content, None, "").await }
+        async move { transfer(options, transport, offer_content, None, "").await }
     });
     let sync_settings = SyncSettings::default().filter(matrix_common::just_joined_rooms_filter());
 

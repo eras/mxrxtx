@@ -1,5 +1,5 @@
 use crate::{
-    config, download,
+    config, download::{self, Options},
     matrix_common, matrix_log,
     matrix_signaling::{MatrixSignaling, SessionInfo},
     progress_common, protocol,
@@ -45,7 +45,7 @@ struct Setup {
     client: Client,
     device_id: OwnedDeviceId,
     config: config::Config,
-    output_dir: String,
+    options: Options,
     rooms: Option<Vec<Joined>>,
     matrix_log: matrix_log::MatrixLog,
     multi_progress: MultiProgress,
@@ -58,7 +58,7 @@ struct Monitor {
     device_id: OwnedDeviceId,
     config: config::Config,
     results_send: mpsc::UnboundedSender<Result<(), Error>>,
-    output_dir: String,
+    options: Options,
     rooms: Option<Vec<Joined>>,
     client: Client,
     matrix_log: Arc<Mutex<matrix_log::MatrixLog>>,
@@ -81,7 +81,7 @@ impl Monitor {
             device_id: setup.device_id,
             config: setup.config,
             results_send,
-            output_dir: setup.output_dir,
+            options: setup.options,
             rooms: setup.rooms,
             client: setup.client.clone(),
             matrix_log,
@@ -166,7 +166,7 @@ impl Monitor {
         // TODO: handle errors
         let _download_task = tokio::spawn({
             let matrix_log = self.matrix_log.clone();
-            let output_dir = self.output_dir.clone();
+            let options = self.options.clone();
             let event_id = event_id.clone();
             let multi_progress = self.multi_progress.clone();
             let peer_user_id = peer_user_id.clone();
@@ -188,7 +188,7 @@ impl Monitor {
                 // TODO: handle errors
                 transfer_session.lock().await.inc_tranferring();
                 let status = download::transfer(
-                    output_dir,
+                    options,
                     transport,
                     offer_content,
                     Some(&multi_progress),
@@ -227,7 +227,7 @@ impl Monitor {
 #[rustfmt::skip::macros(select)]
 pub async fn monitor(
     config: config::Config,
-    output_dir: &str,
+    options: Options,
     rooms: Option<Vec<String>>,
     max_transfers: Option<usize>,
 ) -> Result<(), Error> {
@@ -275,7 +275,7 @@ pub async fn monitor(
         client: client.clone(),
         device_id,
         config,
-        output_dir: output_dir.to_string(),
+        options,
         rooms,
         matrix_log: matrix_log.clone(),
         multi_progress: multi,

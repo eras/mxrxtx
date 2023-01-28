@@ -108,7 +108,11 @@ async fn transfer_file() {
                 let download_tmp_dir = download_tmp_dir.lock().await;
                 String::from(download_tmp_dir.as_ref().unwrap().path().to_str().unwrap())
             };
-            download::transfer(download_path, transport, offer_content, None, &"")
+	    let options = download::Options {
+		output_dir: download_path,
+		skip_existing: false,
+	    };
+            download::transfer(options, transport, offer_content, None, &"")
                 .await
                 .map_err(anyhow::Error::from)
         }

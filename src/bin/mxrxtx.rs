@@ -140,6 +140,12 @@ async fn main() -> Result<(), Error> {
 			.default_value(".")
 			.help("Directory to use for downloading, defaults to ."),
 		)
+                .arg(
+                    clap::Arg::new("redownload")
+                        .long("redownload")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Download files even if they already exist with the correct checksum"),
+                ),
         )
         .subcommand(
             clap::Command::new("offer")
@@ -200,7 +206,12 @@ async fn main() -> Result<(), Error> {
 			.default_value(".")
 			.help("Directory to use for downloading, defaults to ."),
 		)
-
+                .arg(
+                    clap::Arg::new("redownload")
+                        .long("redownload")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Download files even if they already exist with the correct checksum"),
+                ),
         )
         .arg(
             clap::Arg::new("debug")
@@ -227,16 +238,19 @@ async fn main() -> Result<(), Error> {
             setup::setup_mode(config, &config_file, !skip_verify).await?
         }
         Some(("monitor", monitor_args)) => {
-	    let output_dir = monitor_args.value_of("output-dir").unwrap();
             let rooms: Vec<String> = monitor_args.values_of_t("rooms").unwrap_or_default();
             let max: Option<usize> = if let Some(value) = monitor_args.value_of("max") {
                 Some(value.to_string().parse::<usize>()?)
             } else {
                 None
             };
+	    let download_options = download::Options {
+		output_dir: monitor_args.value_of("output-dir").unwrap().to_string(),
+		skip_existing: !monitor_args.get_flag("redownload"),
+	    };
             monitor::monitor(
                 config,
-                output_dir,
+                download_options,
                 if rooms.is_empty() { None } else { Some(rooms) },
 		max
             )
@@ -251,7 +265,11 @@ async fn main() -> Result<(), Error> {
                 .values_of_t("url")
                 .expect("clap arguments should ensure this");
             let urls: Vec<&str> = args.iter().map(|x| x.as_str()).collect();
-            download::download(config, urls, output_dir).await?;
+	    let download_options = download::Options {
+		output_dir: output_dir.to_string(),
+		skip_existing: !download_args.get_flag("redownload"),
+	    };
+            download::download(config, urls, download_options).await?;
         }
         Some(("offer", offer_args)) => {
             let room_args: Vec<String> = offer_args
