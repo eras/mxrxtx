@@ -16,6 +16,8 @@ signaling medium. It's like
 [DCC](https://en.wikipedia.org/wiki/Direct_Client-to-Client) for
 Matrix.
 
+![Demo](doc/mxrxtx.gif)
+
 Compared to using the normal file upload/download functionality this
 approach doesn't have file size limitations (as configured by the
 homeserver admin) and naturally it doesn't consume almost any server
