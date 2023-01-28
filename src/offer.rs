@@ -184,10 +184,11 @@ async fn handle_accept(
     let cn = transport.accept().await?;
     matrix_log
         .log(
-            Some(&spinner),
+            None,
             &format!("Accepted a connection, transferring file to {peer}"),
         )
         .await?;
+    drop(spinner);
     let progress = make_transfer_progress(offer_files, Some(multi_progress));
     offer_session_state.lock().await.inc_tranferring();
     progress.set_prefix(format!("{peer} "));
@@ -237,11 +238,6 @@ async fn accepter(
     let (finished_send, mut finished_recv) = mpsc::unbounded_channel();
     let matrix_log = &accepter_state.matrix_log;
     let multi_progress = &accepter_state.multi_progress;
-    let top_spinner = progress_common::make_spinner(Some(multi_progress))
-	.with_finish(ProgressFinish::AndClear);
-    matrix_log
-        .log(Some(&top_spinner), "Waiting for new signaling peer")
-        .await?;
     loop {
 	let signaling = select! {
 	    _done = accepter_state.cancel.cancelled() => {
@@ -411,7 +407,7 @@ pub async fn offer(
                 &format!("Offering {}", &uri.matrix_uri_string()),
             )
             .await?;
-        let offer_session_state = Arc::new(Mutex::new(TransferSession::new(&multi_progress)));
+        let offer_session_state = Arc::new(Mutex::new(TransferSession::new_from_multiprogess(&multi_progress, "")));
         let accepter_state = AccepterState {
             offer_files,
             ice_servers: config.ice_servers,

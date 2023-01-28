@@ -5,16 +5,22 @@ pub struct TransferSession {
     num_transferring: usize,
     num_complete: usize,
     spinner: ProgressBar,
+    prefix: String,
 }
 
 impl TransferSession {
-    pub fn new(multi_progress: &MultiProgress) -> Self {
+    pub fn new_from_multiprogess(multi_progress: &MultiProgress, prefix: &str) -> Self {
         let spinner = progress_common::make_spinner(Some(multi_progress))
             .with_finish(ProgressFinish::AndClear);
+	Self::new(spinner, prefix)
+    }
+
+    pub fn new(spinner: ProgressBar, prefix: &str) -> Self {
         let session = TransferSession {
             num_complete: 0,
             num_transferring: 0,
             spinner,
+	    prefix: prefix.to_string(),
         };
         session.update_spinner();
         session
@@ -34,8 +40,8 @@ impl TransferSession {
 
     pub fn update_spinner(&self) {
         self.spinner.set_message(format!(
-            "Transfers in progress: {} Complete transfers: {}",
-            self.num_transferring, self.num_complete,
+            "{}Transfers in progress: {} Complete transfers: {}",
+	    self.prefix, self.num_transferring, self.num_complete,
         ));
     }
 }

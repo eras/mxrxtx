@@ -239,7 +239,8 @@ pub async fn monitor(
     } = matrix_common::init(&config).await?;
 
     let multi = MultiProgress::new();
-    let spinner = progress_common::make_spinner(Some(&multi));
+    let spinner = progress_common::make_spinner(Some(&multi))
+        .with_finish(indicatif::ProgressFinish::AndClear);
     matrix_log.log(Some(&spinner), "Starting monitor").await?;
 
     let sync_settings = SyncSettings::default();
@@ -257,8 +258,7 @@ pub async fn monitor(
         ),
     };
 
-    matrix_log.log(Some(&spinner), "Monitoring offers").await?;
-    let transfer_session = TransferSession::new(&multi);
+    let transfer_session = TransferSession::new(spinner.clone(), "Monitoring offers. ");
 
     let cancel = CancellationToken::new();
     tokio::spawn({
