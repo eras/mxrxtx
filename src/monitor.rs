@@ -192,7 +192,7 @@ impl Monitor {
                     transport,
                     offer_content,
                     Some(&multi_progress),
-                    peer_user_id.as_ref(),
+                    &format!("{peer_user_id} "),
                 )
                 .await;
                 {
