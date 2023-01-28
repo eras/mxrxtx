@@ -1,6 +1,7 @@
 use mxrxtx::{config, download, matrix_verify, monitor, offer, setup, version::get_version};
-use std::io::Write;
 use thiserror::Error;
+use std::path::Path;
+use std::fs::File;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -27,6 +28,46 @@ pub enum Error {
 
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
+
+    #[error(transparent)]
+    TracingSubscriberFilterParseError(#[from] tracing_subscriber::filter::ParseError),
+}
+
+const DEFAULT_LOG_FILTER: &str = "mxrxtx=trace";
+
+fn init_logging(log_file_name: Option<&str>) -> Result<Option<tracing_appender::non_blocking::WorkerGuard>, Error> {
+    let log_file_path = if let Some(log_file_name) = log_file_name {
+	Path::new(log_file_name)
+    } else {
+	return Ok(None)
+    };
+
+    let log_file = File::create(log_file_path)?;
+
+    let format = tracing_subscriber::fmt::format()
+	.with_level(true)
+	.with_target(false)
+	.with_thread_ids(true)
+	.with_thread_names(true)
+	.with_source_location(true)
+	.compact();
+
+    let env_filter = tracing_subscriber::EnvFilter::builder()
+	.with_default_directive(DEFAULT_LOG_FILTER.parse()?)
+	.from_env_lossy();
+
+    let (non_blocking, guard) = tracing_appender::non_blocking(log_file);
+    let subscriber = tracing_subscriber::fmt::Layer::new()
+	.event_format(format)
+	.with_writer(non_blocking);
+
+    use tracing_subscriber::prelude::*;
+    tracing_subscriber::registry()
+	.with(subscriber.with_ansi(false))
+	.with(env_filter)
+	.init();
+
+    Ok(Some(guard))
 }
 
 #[tokio::main]
@@ -36,6 +77,9 @@ async fn main() -> Result<(), Error> {
         "Config file to load, defaults to {}",
         setup::get_config_file(None)?
     );
+    let debug_help =
+	format!("Enable logging according to RUST_LOG to given file (default: {DEFAULT_LOG_FILTER}). \
+                 The file will always be overwritten.");
     let app = clap::App::new("mxrxtx")
         .setting(clap::AppSettings::ColoredHelp)
         .setting(clap::AppSettings::ArgRequiredElseHelp)
@@ -158,25 +202,16 @@ async fn main() -> Result<(), Error> {
 		)
 
         )
-        .arg(clap::Arg::new("trace").long("trace").help("Enable tracing"));
+        .arg(
+            clap::Arg::new("debug")
+                .long("debug")
+                .takes_value(true)
+		.help(debug_help.as_str()),
+        );
     let info_string = app.render_long_version().trim().to_string();
     let args = app.get_matches();
 
-    if args.is_present("trace") {
-        tracing_subscriber::fmt::init();
-    } else {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("mxrxtx=warn"))
-            .format(|buf, record| {
-                writeln!(
-                    buf,
-                    "{} {:<5} {}",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                    record.level(),
-                    record.args()
-                )
-            })
-            .init();
-    }
+    let _log_guard = init_logging(args.value_of("debug"))?;
 
     let config_file = setup::get_config_file(args.value_of("config"))?;
     let mut config = config::Config::load(&config_file)?;

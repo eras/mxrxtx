@@ -47,6 +47,7 @@ impl MatrixLog {
     }
 
     pub async fn log(&self, progress: Option<&ProgressBar>, message: &str) -> Result<(), Error> {
+	info!("{message}");
         if let Some(progress) = progress {
             progress.set_message(message.to_string());
         }
