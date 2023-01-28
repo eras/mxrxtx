@@ -67,13 +67,14 @@ async fn transfer_file() {
     )));
     let signaling = TestSignalingRouter::new();
     let offer_task = tokio::spawn({
-        let mut offer_content = offer_content.clone();
+        let offer_content = offer_content.clone();
         let offer_tmp_dir = offer_tmp_dir.clone();
         let mut signaling = signaling.clone();
         async move {
             let mut transport =
                 Transport::new(signaling.accept().await.unwrap(), vec![]).expect("weird");
-            for offer_file in &mut offer_content.files {
+	    let mut files = Vec::new();
+            for mut offer_file in offer_content.files.clone() {
                 let offer_tmp_dir = offer_tmp_dir.lock().await;
                 let file_path = offer_tmp_dir
                     .as_ref()
@@ -84,11 +85,12 @@ async fn transfer_file() {
                 for _ in 0..offer_file.size {
                     tmp_file.write(b"b").unwrap();
                 }
-                offer_file.name = file_path.to_string_lossy().to_string();
+                offer_file.name = file_path.clone().to_string_lossy().to_string();
+		files.push((file_path, offer_file));
             }
             let progress = offer::make_transfer_progress(&offer_content.files, None);
             offer::transfer(
-                offer_content.files,
+                files,
                 transport.accept().await.unwrap(),
                 progress,
 		CancellationToken::new(),

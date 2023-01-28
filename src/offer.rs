@@ -17,8 +17,8 @@ use sha2::{Digest, Sha512};
 use std::cmp;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::path::Path;
 use std::io::{Read, BufReader};
+use std::path::{Path, PathBuf, is_separator};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::select;
@@ -55,6 +55,12 @@ pub enum Error {
 
     #[error(transparent)]
     MatrixLogError(#[from] matrix_log::Error),
+
+    #[error("Cannot convert path to string: {:?}", .0)]
+    FileNameError(PathBuf),
+
+    #[error(transparent)]
+    PathStripPrefixError(#[from] std::path::StripPrefixError),
 }
 
 pub fn make_transfer_progress(
@@ -73,7 +79,7 @@ const BLOCK_SIZE: usize = 1usize << 16;
 #[rustfmt::skip::macros(select)]
 #[instrument(skip_all)]
 pub async fn transfer(
-    offer_files: Vec<protocol::File>,
+    offer_files: Vec<(PathBuf, protocol::File)>,
     mut cn: transport::DataStream,
     progress: ProgressBar,
     cancel: CancellationToken,
@@ -82,8 +88,8 @@ pub async fn transfer(
     let mut buffer: [u8; BLOCK_SIZE] = [0; BLOCK_SIZE];
     let mut total_bytes = 0;
     event!(Level::TRACE, is_cancelled=cancel.is_cancelled());
-    for offer_file in offer_files {
-	let mut file = BufReader::new(File::open(offer_file.name.clone())?);
+    for (offer_path, offer_file) in offer_files {
+	let mut file = BufReader::new(File::open(offer_path)?);
         let mut eof = false;
         let file_size = offer_file.size as usize;
         let mut sent_file_bytes = 0usize;
@@ -144,7 +150,7 @@ pub async fn transfer(
 
 #[derive(Clone)]
 struct AccepterState {
-    offer_files: Vec<protocol::File>,
+    offer_files: Vec<(PathBuf, protocol::File)>,
     ice_servers: Vec<String>,
     matrix_log: matrix_log::MatrixLog,
     multi_progress: MultiProgress,
@@ -191,7 +197,11 @@ async fn handle_accept(
         )
         .await?;
     drop(spinner);
-    let progress = make_transfer_progress(offer_files, Some(multi_progress));
+    let progress = {
+	let files: Vec<protocol::File> =
+	    offer_files.iter().map(|(_, file)| file.clone()).collect();
+	make_transfer_progress(&files, Some(multi_progress))
+    };
     offer_session_state.lock().await.inc_tranferring();
     progress.set_prefix(format!("{peer} "));
     let transfer_task = tokio::spawn({
@@ -297,6 +307,68 @@ async fn accepter(
     Ok(())
 }
 
+fn common_prefix(a: &str, b: &str) -> String {
+    let mut prefix = "".to_string();
+    for (a, b) in a.chars().zip(b.chars()) {
+	if a == b {
+	    prefix.push(a);
+	} else {
+	    break;
+	}
+    }
+    prefix
+}
+
+// TODO: use std::path::Path::components
+#[instrument(ret)]
+fn eliminate_common_prefix_dir(offer_files: Vec<&str>) -> Result<(PathBuf, Vec<PathBuf>), Error> {
+    let mut prefix =
+	match offer_files.first() {
+	    Some(file) => file.to_string(),
+	    None => "".to_string(),
+	};
+    let mut result = Vec::new();
+    // TODO: take case-insensitive filesystems into account? is there a thing like file identity to use?
+    for file in offer_files.clone() {
+	prefix = common_prefix(&prefix, file);
+    }
+    // prefix cut to the last directory separator
+    let mut cut_prefix = String::new();
+    let mut cur_chunk = String::new();
+    for char in prefix.chars() {
+	cur_chunk.push(char);
+	if is_separator(char) {
+	    cut_prefix.push_str(&cur_chunk);
+	    cur_chunk.clear();
+	}
+    }
+    let prefix = Path::new(&cut_prefix);
+    event!(Level::TRACE, "prefix={:?}", prefix);
+    for file in offer_files {
+	event!(Level::TRACE, "file={:?}", file);
+	result.push(Path::new(file).strip_prefix(prefix)?.to_path_buf());
+    }
+    Ok((prefix.to_path_buf(), result))
+}
+
+#[instrument]
+fn remove_path_separator_prefix(name: &str) -> String {
+    let mut iter = name.chars();
+    let mut result = String::new();
+    // first skip all path separator (and copy first non-path-separator)
+    for char in iter.by_ref() {
+	if !is_separator(char) {
+	    result.push(char);
+	    break;
+	}
+    }
+    // then copy the rest of the chars
+    for char in iter {
+	result.push(char);
+    }
+    result.to_string()
+}
+
 #[rustfmt::skip::macros(select)]
 #[instrument(skip_all)]
 pub async fn offer(
@@ -322,16 +394,30 @@ pub async fn offer(
     matrix_log
         .log(Some(&spinner), "Calculating checksums")
         .await?;
-    let offer_files: Vec<protocol::File> = offer_files
+    let (common_dir, offer_files) = eliminate_common_prefix_dir(offer_files)?;
+    event!(Level::TRACE, "common_dir={:?}", common_dir);
+    let offer_files: Vec<(PathBuf, protocol::File)> = offer_files
         .iter()
-        .map(|file| -> Result<protocol::File, Error> {
-            let (sha512, size) = digest::file_sha512(Path::new(&file), Some(&multi_progress))?;
+        .map(|file: &PathBuf| -> Result<(PathBuf, protocol::File), Error> {
+	    event!(Level::TRACE, "file={:?}", file);
+	    let file_path = {
+		let mut path = common_dir.clone();
+		path.push(file);
+		path
+	    };
+	    event!(Level::TRACE, "file_path={:?}", file_path);
+            let (sha512, size) = digest::file_sha512(&file_path, Some(&multi_progress))?;
             let mut hashes = BTreeMap::new();
+	    let file_name =
+		remove_path_separator_prefix(
+		    &file.clone().into_os_string().into_string()
+			.map_err(|_| Error::FileNameError(file_path.to_path_buf()))?
+		);
             hashes.insert("sha512".to_string(), sha512);
-            Ok(
-                fs::metadata(Path::new(&file)).map(|_metadata| protocol::File {
+            Ok((file_path.to_path_buf(),
+                fs::metadata(file_path).map(|_metadata| protocol::File {
                     // we need to get date later so let's not drop this metadata thing yet..
-                    name: file.to_string(),
+                    name: file_name,
                     mimetype: String::from("application/octet-stream"),
                     size, // TODO: respect this when sending file
                     thumbnail_file: None,
@@ -339,9 +425,9 @@ pub async fn offer(
                     thumbnail_url: None,
                     hashes,
                 })?,
-            )
+            ))
         })
-        .try_fold(Vec::new(), |mut acc: Vec<protocol::File>, file_result| {
+        .try_fold(Vec::new(), |mut acc: Vec<(PathBuf, protocol::File)>, file_result| {
             acc.push(file_result?);
             Result::<_, Error>::Ok(acc)
         })?;
@@ -350,7 +436,7 @@ pub async fn offer(
         version: get_version(),
         name: None,
         description: None,
-        files: offer_files.clone(),
+        files: offer_files.iter().map(|(_, file)| file.clone()).collect(),
         thumbnail_info: None,
         thumbnail_url: None,
     };

@@ -112,6 +112,9 @@ open to see its contents (situation does not seem better even with
 events](https://github.com/matrix-org/matrix-spec-proposals/pull/1767)
 support enabled even if `mxrxtx` did support them).
 
+Common prefix (e.g. in case of `~/Download/*.mp4`) is eliminated from
+the offer before the names are put into the offer event.
+
 The offer is redacted when `mxrxtx` exits.
 ## Download a file
 You can download a file with `mxrxtx download 'matrix:roomid/rCWNvpCTZHQkiRYUDE:matrix.org/$uPjb5qzQ0FmyQX5j0tXjCjdwKp_es00vNn_tePPzYpA'`. Accepts also matrix.to-URLs.
