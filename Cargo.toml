@@ -21,7 +21,7 @@ futures-util = "0.3.25"
 hex = "0.4.3"
 indicatif = { version = "0.17.3", features = ["tokio"] }
 log = "0.4.14"
-matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", rev = "386cbce34412e50b40d65fb7f6473fcbc3128c95", features = ["sled", "e2e-encryption"] }
+matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk", rev = "819f962419b0bf8eccbbc67f777e05cddd2c6c03", features = ["sled", "e2e-encryption"] }
 matrix-sdk-sled = "0.2.0"
 matrix_uri = "0.1.0"
 pin-utils = "0.1.0"
