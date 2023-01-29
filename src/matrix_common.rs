@@ -8,6 +8,7 @@ use std::convert::TryFrom;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -89,6 +90,7 @@ fn room_strings(rooms: &[&Joined]) -> Vec<String> {
     rooms.iter().map(|x| format!("{x:?}")).collect()
 }
 
+#[instrument]
 pub(crate) async fn get_joined_room_by_name(client: &Client, room: &str) -> Result<Joined, Error> {
     let room = match RoomType::classify(room) {
         Ok(RoomType::RoomId) => {
