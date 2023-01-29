@@ -6,3 +6,5 @@ mxrxtx.ini
 .kopiaignore
 .dir-locals.el
 ext
+doc/tlaplus/v1/states/*
+doc/tlaplus/v1/trace/*
