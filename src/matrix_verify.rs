@@ -1,9 +1,8 @@
 // Based on the emoji_verification example from the matrix-sdk
 
-use crate::{config, matrix_common, matrix_log};
+use crate::{config, matrix_common::{self, MatrixInit}, matrix_log, progress_common::make_spinner};
 use std::io::Write;
 use thiserror::Error;
-use tokio::select;
 use tokio::sync::mpsc;
 
 use futures::stream::StreamExt;
@@ -226,33 +225,50 @@ fn drop_handlers(client: &Client, handlers: Vec<EventHandlerHandle>) {
         .for_each(|handler| client.remove_event_handler(handler));
 }
 
-#[rustfmt::skip::macros(select)]
-pub async fn verify(config: config::Config) -> Result<(), Error> {
+pub async fn verify_with_matrix_init(matrix_init: MatrixInit) -> Result<MatrixInit, Error> {
     let matrix_common::MatrixInit {
         client, matrix_log, ..
-    } = matrix_common::init(&config).await?;
+    } = &matrix_init;
 
     let (result_send, mut result_receive) = mpsc::unbounded_channel();
     let handlers = add_event_handlers(client.clone(), result_send).await?;
     let sync_settings = SyncSettings::default();
 
-    info!("Ready for verification");
-    select! {
-	result = result_receive.recv() => {
-	    if let Some(result) = result {
-		if result? {
-		    matrix_log.log(None, "Verification completed").await?;
-		} else {
-		    info!("Verification failed");
-		}
-	    }
+    let spinner = make_spinner(None);
+    spinner.set_message("Ready for verification");
+    let sync_task = tokio::spawn({
+	let client = client.clone();
+	async move {
+	    client.sync(sync_settings).await
 	}
-	done = client.sync(sync_settings) => {
-	    done?;
+    });
+
+    if let Some(result) = result_receive.recv().await {
+	if result? {
+	    matrix_log.log(Some(&spinner), "Verification completed").await?;
+	} else {
+	    info!("Verification failed");
+	    spinner.set_message("Verification failed");
 	}
     }
 
-    drop_handlers(&client, handlers);
+    sync_task.abort();
+    match sync_task.await {
+	Err(_) => (
+	    // ignore joinerror
+	),
+	Ok(result) => {
+	    result?;
+	}
+    }
+
+    drop_handlers(client, handlers);
+
+    Ok(matrix_init)
+}
+
+pub async fn verify(config: config::Config) -> Result<(), Error> {
+    verify_with_matrix_init(matrix_common::init(&config).await?).await?;
 
     Ok(())
 }

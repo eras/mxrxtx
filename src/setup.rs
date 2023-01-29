@@ -17,6 +17,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, warn};
@@ -198,15 +199,14 @@ async fn prompt_ice_servers() -> Result<Vec<String>, Error> {
     Ok(ice_servers)
 }
 
-async fn prompt_log_room(config: &config::Config) -> Result<Option<String>, Error> {
+#[instrument]
+async fn prompt_log_room(config: &config::Config, client: &Client) -> Result<Option<String>, Error> {
     let log_room = console::prompt(
         "Which room (can be #alias:hs, !id or name) to use for sending log messages, or none?",
     )
     .await?;
     if !log_room.is_empty() {
-        let client = matrix_common::init(config).await?.client;
-
-        let log_room = matrix_common::get_joined_room_by_name(&client, &log_room).await?;
+        let log_room = matrix_common::get_joined_room_by_name(client, &log_room).await?;
 
         Ok(Some(log_room.room_id().to_string()))
     } else {
@@ -338,6 +338,7 @@ pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginR
     Ok(login)
 }
 
+#[instrument]
 pub async fn setup_mode(
     mut config: config::Config,
     config_file: &str,
@@ -383,29 +384,36 @@ pub async fn setup_mode(
 
     drop(client);
 
-    if do_verify {
-        println!(
-            "Starting emoji verification. Press ^C to skip.\n\
-	     You may restart verification later with mxrxtx verify.\n\
-	     \n\
-	     Note that the initial sync can take a very long time. For me it takes 10 minutes.\n\
-	     \n\
-	     Don't start the verification before the message \"Ready for verification\" appears.",
-        );
+    let matrix_init = matrix_common::init(&config).await?;
+    let matrix_init =
+	if do_verify {
+            println!(
+		"Starting emoji verification. Press ^C to skip.\n\
+		 You may restart verification later with mxrxtx verify.\n\
+		 \n\
+		 Note that the initial sync can take a very long time. For me it takes 10 minutes.\n\
+		 \n\
+		 Don't start the verification before the message \"Ready for verification\" appears.",
+            );
 
-        crate::matrix_verify::verify(config.clone()).await?;
-    }
+            crate::matrix_verify::verify_with_matrix_init(matrix_init).await?
+	} else {
+	    matrix_init
+	};
 
-    match prompt_log_room(&config).await {
+    match prompt_log_room(&config, &matrix_init.client).await {
         Ok(Some(log_room)) => {
             config.log_room = Some(log_room);
             config.save(config_file)?;
             info!("Saved configuration");
         }
-        Ok(None) => (),
+        Ok(None) => {
+            info!("No log room provided");
+	},
         Err(err) => {
-            error!(
-                "There was an error: {err:?}. Continuing with emoji verification anyway.\n\
+            error!("log room error: {err:?}");
+            eprintln!(
+                "There was an error: {err:?}.\n\
 		 You can edit the configuration to enable the log room."
             );
         }
