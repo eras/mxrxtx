@@ -148,6 +148,33 @@ impl Default for Options {
     }
 }
 
+fn path_for_file(file_name: &str, options: &Options) -> Result<PathBuf, Error> {
+    let mut path = PathBuf::from(&options.output_dir);
+    path.push(escape_paths(file_name));
+    Ok(path)
+}
+
+pub async fn check_existing_files(files: &Vec<protocol::File>,
+				  multi: &MultiProgress,
+				  options: &Options) -> Result<bool, Error> {
+    let mut has_all_files = true;
+    for offer_file in files {
+	if let Some(expected) = offer_file.hashes.get("sha512") {
+	    match file_sha512(&path_for_file(&offer_file.name, options)?, Some(multi)).await {
+		Ok((sha512, _size)) => {
+		    if sha512 != *expected {
+			has_all_files = false;
+		    }
+		}
+		Err(_) => {
+		    has_all_files = false;
+		}
+	    }
+	}
+    }
+    Ok(has_all_files)
+}
+
 pub async fn transfer(
     options: Options,
     mut transport: transport::Transport,
@@ -156,32 +183,13 @@ pub async fn transfer(
     prefix: &str,
 ) -> Result<(), Error> {
     let files = &offer_content.files;
-    let path_for_file = |file_name: &str| -> Result<PathBuf, Error> {
-	let mut path = PathBuf::from(&options.output_dir);
-	path.push(escape_paths(file_name));
-	Ok(path)
-    };
     let multi = if let Some(multi) = multi {
         multi.clone()
     } else {
         MultiProgress::new()
     };
     if options.skip_existing {
-	let mut has_all_files = true;
-	for offer_file in files {
-	    if let Some(expected) = offer_file.hashes.get("sha512") {
-		match file_sha512(&path_for_file(&offer_file.name)?, Some(&multi)) {
-		    Ok((sha512, _size)) => {
-			if sha512 != *expected {
-			    has_all_files = false;
-			}
-		    }
-		    Err(_) => {
-			has_all_files = false;
-		    }
-		}
-	    }
-	}
+	let has_all_files = check_existing_files(files, &multi, &options).await?;
 	if has_all_files {
 	    info!("File already downloaded completely, skipping");
 	    return Ok(())
@@ -239,7 +247,7 @@ pub async fn transfer(
             } else {
                 let write_bytes = cmp::min(cur_bytes_remaining, n);
                 if cur_file_hasher.is_none() {
-		    let file = BufWriter::new(File::create(&path_for_file(&files[file_idx].name)?)?);
+		    let file = BufWriter::new(File::create(&path_for_file(&files[file_idx].name, &options)?)?);
                     let hasher = Sha512::new();
                     cur_file_hasher = Some((file, hasher));
                 }

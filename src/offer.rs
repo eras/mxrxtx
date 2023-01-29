@@ -369,6 +369,48 @@ fn remove_path_separator_prefix(name: &str) -> String {
     result.to_string()
 }
 
+#[instrument(skip(multi_progress))]
+async fn make_offers_from_filenames(
+    offer_files: Vec<&str>,
+    multi_progress: Option<&MultiProgress>
+) -> Result<Vec<(PathBuf, protocol::File)>, Error> {
+    let (common_dir, offer_files) = eliminate_common_prefix_dir(offer_files)?;
+    event!(Level::TRACE, "common_dir={:?}", common_dir);
+    let mut result = Vec::new();
+    for file in &offer_files {
+	event!(Level::TRACE, "file={:?}", file);
+	let file_path = {
+	    let mut path = common_dir.clone();
+	    path.push(file);
+	    path
+	};
+	event!(Level::TRACE, "file_path={:?}", &file_path);
+	let (sha512, size) = digest::file_sha512(&file_path, multi_progress).await?;
+	let mut hashes = BTreeMap::new();
+	let file_name =
+	    remove_path_separator_prefix(
+		&file.clone().into_os_string().into_string()
+		    .map_err(|_| Error::FileNameError(file_path.to_path_buf()))?
+	    );
+	hashes.insert("sha512".to_string(), sha512);
+	result.push(
+	    (file_path.to_path_buf(),
+             fs::metadata(&file_path).map(|_metadata| protocol::File {
+		 // we need to get date later so let's not drop this metadata thing yet..
+		 name: file_name,
+		 mimetype: String::from("application/octet-stream"),
+		 size, // TODO: respect this when sending file
+		 thumbnail_file: None,
+		 thumbnail_info: None,
+		 thumbnail_url: None,
+		 hashes,
+             })?,
+	    )
+	);
+    }
+    Ok(result)
+}
+
 #[rustfmt::skip::macros(select)]
 #[instrument(skip_all)]
 pub async fn offer(
@@ -391,46 +433,8 @@ pub async fn offer(
     let room = matrix_common::get_joined_room_by_name(&client, room).await?;
     debug!("room: {:?}", room);
 
-    matrix_log
-        .log(Some(&spinner), "Calculating checksums")
-        .await?;
-    let (common_dir, offer_files) = eliminate_common_prefix_dir(offer_files)?;
-    event!(Level::TRACE, "common_dir={:?}", common_dir);
-    let offer_files: Vec<(PathBuf, protocol::File)> = offer_files
-        .iter()
-        .map(|file: &PathBuf| -> Result<(PathBuf, protocol::File), Error> {
-	    event!(Level::TRACE, "file={:?}", file);
-	    let file_path = {
-		let mut path = common_dir.clone();
-		path.push(file);
-		path
-	    };
-	    event!(Level::TRACE, "file_path={:?}", file_path);
-            let (sha512, size) = digest::file_sha512(&file_path, Some(&multi_progress))?;
-            let mut hashes = BTreeMap::new();
-	    let file_name =
-		remove_path_separator_prefix(
-		    &file.clone().into_os_string().into_string()
-			.map_err(|_| Error::FileNameError(file_path.to_path_buf()))?
-		);
-            hashes.insert("sha512".to_string(), sha512);
-            Ok((file_path.to_path_buf(),
-                fs::metadata(file_path).map(|_metadata| protocol::File {
-                    // we need to get date later so let's not drop this metadata thing yet..
-                    name: file_name,
-                    mimetype: String::from("application/octet-stream"),
-                    size, // TODO: respect this when sending file
-                    thumbnail_file: None,
-                    thumbnail_info: None,
-                    thumbnail_url: None,
-                    hashes,
-                })?,
-            ))
-        })
-        .try_fold(Vec::new(), |mut acc: Vec<(PathBuf, protocol::File)>, file_result| {
-            acc.push(file_result?);
-            Result::<_, Error>::Ok(acc)
-        })?;
+    matrix_log.log(Some(&spinner), "Calculating checksums").await?;
+    let offer_files = make_offers_from_filenames(offer_files, Some(&multi_progress)).await?;
 
     let offer = protocol::OfferContent {
         version: get_version(),
