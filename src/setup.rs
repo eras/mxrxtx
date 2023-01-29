@@ -271,18 +271,18 @@ pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginR
             info!("Logging in");
             client.login_username(user_id.localpart(), &password)
         }
-        LoginType::Sso(_sso) => {
+        LoginType::Sso(sso) => {
             // TODO: actually use Some(provider_id) once the quoting bug issue is fixed:
             // https://github.com/ruma/ruma/issues/1447
-            // let provider_id = (match &sso.identity_providers[..] {
-            //     [] => {
-            //         error!("Homeserver provided no login types; cannot setup");
-            //         return Err(Error::NoIdentityProvidersAvailable);
-            //     }
-            //     [provider] => provider.clone(),
-            //     providers @ [_, _, ..] => prompt_identity_provider(providers).await?,
-            // })
-            // .id;
+            let provider_id = (match &sso.identity_providers[..] {
+                [] => {
+                    error!("Homeserver provided no login types; cannot setup");
+                    return Err(Error::NoIdentityProvidersAvailable);
+                }
+                [provider] => provider.clone(),
+                providers @ [_, _, ..] => prompt_identity_provider(providers).await?,
+            })
+            .id;
             use warp::Filter;
             let (response_send, mut response_recv) = mpsc::channel(1);
             let response_send = Arc::new(Mutex::new(response_send));
@@ -310,7 +310,7 @@ pub async fn make_login(client: &Client, user_id: &OwnedUserId) -> Result<LoginR
             let warp_join = tokio::spawn(warp);
             let url = format!("http://{addr}/{prefix}");
             info!("Started SSO response server at {url}");
-            let url = client.get_sso_login_url(&url, None).await?;
+            let url = client.get_sso_login_url(&url, Some(&provider_id)).await?;
             console::print(&format!(
                 "\nPlease visit\n\n  {url}\n\n\
 		 Note that your browser (or extension like NoScript) may prevent you from\n\
