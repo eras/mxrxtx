@@ -56,11 +56,11 @@ Init ==
 
 ProcessLogin(unchanged_others) ==
    \E device_id \in DeviceId:
-   \E mx_id \in MxId:
+   LET event == DeviceToHS(device_id)!Get IN
    /\ ~IsDeviceLoggedIn(device_id)
-   /\ DeviceToHS(device_id)!Recv([message  |-> "Login",
-                                  contents |-> [ mx_id |-> mx_id]])
-   /\ hs_device_mx_id' = [hs_device_mx_id EXCEPT ![device_id] = mx_id]
+   /\ DeviceToHS(device_id)!Discard
+   /\ event.message = "Login"
+   /\ hs_device_mx_id' = [hs_device_mx_id EXCEPT ![device_id] = event.contents.mx_id]
    /\ HSToDevice(device_id)!Send([message |-> "LoginOK",
                                   token   |-> [room     |-> Len(hs_room) + 1,
                                                todevice |-> Len(hs_todevice[device_id]) + 1]])
@@ -69,39 +69,35 @@ ProcessLogin(unchanged_others) ==
 
 ProcessSync(unchanged_others) ==
    \E device_id \in DeviceId:
-   \E token \in Token:
-   /\ DeviceToHS(device_id)!Recv([message  |-> "Sync",
-                                  contents |-> token])
+   LET event == DeviceToHS(device_id)!Get IN
+   /\ DeviceToHS(device_id)!Discard
+   /\ event.message = "Sync"
    /\ Assert(hs_device_sync_token[device_id] = NoToken, <<"Device", device_id, "tried to sync while it was already syncing">>)
-   /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = token]
+   /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = event.contents]
    /\ UNCHANGED<<hs_to_device, hs_room, hs_todevice, hs_device_mx_id>>
    /\ unchanged_others
 
 ProcessRoomMessage(unchanged_others) ==
    \E device_id \in DeviceId:
-   \E contents \in Protocol!RoomMessageContents:
-   /\ DeviceToHS(device_id)!Recv([message  |-> "RoomMessage",
-                                  contents |-> contents])
+   LET message == DeviceToHS(device_id)!Get IN
+   /\ DeviceToHS(device_id)!Discard
+   /\ message.message = "RoomMessage"
    /\ hs_room' = hs_room \o <<[sender   |-> hs_device_mx_id[device_id],
-                               contents |-> contents]>>
+                               contents |-> message.contents]>>
    /\ UNCHANGED<<hs_device_sync_token, hs_to_device, hs_todevice, hs_device_mx_id>>
    /\ unchanged_others
 
 ProcessToDevice(unchanged_others) ==
    \E from_device_id \in DeviceId:
-   \E to_device_id \in {0} \cup DeviceId:
-   \E to_mx_id \in MxId:
-   \E contents \in Protocol!ToDeviceContents:
-   /\ DeviceToHS(from_device_id)!Recv([ message   |-> "ToDevice"
-                                      , contents  |-> contents
-                                      , mx_id     |-> to_mx_id
-                                      , device_id |-> to_device_id ])
+   LET event == DeviceToHS(from_device_id)!Get IN
+   /\ DeviceToHS(from_device_id)!Discard
+   /\ event.message = "ToDevice"
    /\ hs_todevice' = [device_id \in DeviceId |->
-                      IF /\ hs_device_mx_id[device_id] = to_mx_id
-                         /\ to_device_id \in {0, device_id} THEN
+                      IF /\ hs_device_mx_id[device_id] = event.mx_id
+                         /\ event.device_id \in {0, device_id} THEN
                          Append(hs_todevice[device_id],
                                 [ sender   |-> hs_device_mx_id[from_device_id]
-                                , contents |-> contents ])
+                                , contents |-> event.contents ])
                       ELSE
                          hs_todevice[device_id]
                       ]

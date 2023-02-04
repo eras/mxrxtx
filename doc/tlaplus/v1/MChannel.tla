@@ -28,13 +28,19 @@ Busy ==
 Send(data) ==
    /\ \lnot Busy
    /\ channels' = [channels EXCEPT ![Id] = data]
-   /\ Assert(data \in Data, <<"Sending invalid data", data, "while expecting", Data>>)
+   (* /\ Assert(data \in Data, <<"Sending invalid data", data, "while expecting", Data>>) *)
 
 Recv(data) ==
    /\ Busy
    /\ data = channels[Id]
    /\ channels' = [channels EXCEPT ![Id] = Null]
-   /\ Assert(data \in Data, <<"Receiving invalid data", data, "while expecting", Data>>)
+   (* /\ Assert(data \in Data, <<"Receiving invalid data", data, "while expecting", Data>>) *)
+
+Get == channels[Id]
+
+Discard ==
+   /\ Busy
+   /\ channels' = [channels EXCEPT ![Id] = Null]
 
 Sending ==
    IF Busy

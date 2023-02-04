@@ -284,14 +284,13 @@ Login1(unchanged_others) ==
    /\ unchanged_others
 
 Login2(unchanged_others) ==
+   LET response == HSToDevice(Id)!Get IN
    /\ Self.logged_in = "inprogress"
-   /\ HSToDevice(Id)!Busy       (* TLC optimization *)
-   /\ \E token \in Token:
-      /\ HSToDevice(Id)!Recv([message |-> "LoginOK",
-                              token |-> token])
-      /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.logged_in = "yes", !.token = token]]
-      /\ UNCHANGED<<datachannel, offer, monitor, device_to_hs>>
-      /\ unchanged_others
+   /\ HSToDevice(Id)!Discard
+   /\ response.message = "LoginOK"
+   /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.logged_in = "yes", !.token = response.token]]
+   /\ UNCHANGED<<datachannel, offer, monitor, device_to_hs>>
+   /\ unchanged_others
 
 Sync(unchanged_others) ==
    /\ Self.logged_in = "yes"
@@ -315,18 +314,17 @@ ProcessToDeviceEvent(todevice_event) ==
 ReceiveSync(unchanged_others) ==
    /\ Self.logged_in = "yes"
    /\ Self.syncing
-   /\ HSToDevice(Id)!Busy     (* TLC optimization *)
-   /\ \/ \E room_event \in Protocol!RoomEvent:
-         /\ HSToDevice(Id)!Recv(room_event)
-         /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                         !.token = room_event.token]]
-         /\ ProcessRoomEvent(room_event)
-      \/ \E todevice_event \in Protocol!ToDeviceEvent:
-         /\ HSToDevice(Id)!Recv(todevice_event)
-         /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                         !.token = todevice_event.token]]
-         /\ ProcessToDeviceEvent(todevice_event)
-   /\ unchanged_others
+   /\ LET event == HSToDevice(Id)!Get IN
+      /\ HSToDevice(Id)!Discard
+      /\ IF event \in Protocol!RoomEvent THEN
+            /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
+                                                            !.token = event.token]]
+            /\ ProcessRoomEvent(event)
+         ELSE
+            /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
+                                                            !.token = event.token]]
+            /\ ProcessToDeviceEvent(event)
+      /\ unchanged_others
 
 Next(unchanged_others) ==
    \/ Login1(unchanged_others)
