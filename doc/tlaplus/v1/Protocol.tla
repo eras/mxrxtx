@@ -72,10 +72,10 @@ ToDeviceContents ==
 ToDevice ==
    [ message   : {"ToDevice"}
    , mx_id     : MxId
-   , device_id : {0} \cup DeviceId (* 0 means "all devices" *)
+   , device_id : {0} \cup DeviceId (* 0 means "all device" *)
    , contents  : ToDeviceContents]
 
-(* Messages devices can send to homeserver *)
+(* Messages device can send to homeserver *)
 DeviceToHSMessages == UNION {
       LoginMessage
     , RoomMessage

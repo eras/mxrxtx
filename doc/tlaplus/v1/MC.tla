@@ -8,15 +8,15 @@ LOCAL INSTANCE Sequences
 Protocol == INSTANCE Protocol
 
 MCInit ==
-   /\ devices = [device_id \in DeviceId |->
+   /\ device = [ device_id \in DeviceId |->
                  Check(Device(device_id)!Type,
-                       Device(device_id)!InitValue)]
+                       Device(device_id)!InitValue) ]
 
 MCSpec == MCInit /\ Init /\ [][Next]_all_vars
 
 (* Eventually all offering nodes will be offering, if there is nothing else the state machine can do *)
 EventuallyOffer ==
-   \A device_id \in CanOffer: <>[](~ENABLED(Next) => devices[device_id].offering)
+   \A device_id \in CanOffer: <>[](~ENABLED(Next) => device[device_id].offering)
 
 (* Has an offer message been sent to the server? *)
 AnOfferIsMade ==

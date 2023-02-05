@@ -5,7 +5,7 @@ CONSTANT
    Id
 
 VARIABLES
-   devices
+   device
  , hs_to_device
  , device_to_hs
  , monitor
@@ -23,7 +23,7 @@ LOCAL INSTANCE SequencesExt     (* FoldSeq *)
 
 Protocol == INSTANCE Protocol
 
-Self == devices[Id]
+Self == device[Id]
 
 TotalSizeOfOffer(offer_files) == FoldSeq(LAMBDA a, b: a.size + b, 0, offer_files)
 
@@ -94,7 +94,7 @@ EstablishSession(unchanged_others) ==
    /\ monitor' = [monitor EXCEPT
                    ![Id].state = "sent-webrtc-offer"
                  ]
-   /\ UNCHANGED<<datachannel, offer, devices, hs_to_device>>
+   /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
    /\ unchanged_others
 
 TotalSizeOfReceived ==
@@ -108,7 +108,7 @@ DoDownload(unchanged_others) ==
       /\ peer_device_id = monitor[Id].peer_device_id
       /\ DataChannel!A(peer_device_id, Id, "data")!Recv(message)
       /\ monitor' = [monitor EXCEPT ![Id].received[CurrentOfferFileIndexOffset(TotalSizeOfReceived, monitor[Id].offer).index] = Append(@, message.data)]
-      /\ UNCHANGED<<offer, devices, hs_to_device, device_to_hs>>
+      /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
       /\ unchanged_others
 
 ValidateChecksum ==
@@ -123,7 +123,7 @@ DoSendAck(unchanged_others) ==
       /\ DataChannel!B(Id, peer_device_id, "data")!Send([ack |-> TRUE])
       /\ monitor' = [monitor EXCEPT ![Id].state = "complete"]
       /\ Assert(ValidateChecksum, "Checksum validation failed")
-      /\ UNCHANGED<<offer, devices, hs_to_device, device_to_hs>>
+      /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
       /\ unchanged_others
 
 ProcessToDeviceEvent(event) ==
@@ -183,7 +183,7 @@ DoOffer(unchanged_others) ==
       (*                         contents |-> << RandomElement(Protocol!OfferFile) >>]) *)
       /\ DeviceToHS(Id)!Send([message  |-> "RoomMessage",
                               contents |-> [ offer |-> offer[Id].offer]])
-      /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
+      /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
       /\ offer' = [offer EXCEPT ![Id].state = "sent-mxrxtx-offer"]
       /\ UNCHANGED<<datachannel, monitor, hs_to_device>>
       /\ unchanged_others
@@ -199,7 +199,7 @@ DoUpload(unchanged_others) ==
          /\ DataChannel!A(Id, peer_device_id, "data")!Send([data |-> offer[Id].offer[index_offset.index].checksum[2][index_offset.offset + 1]])
          /\ offer' = [offer EXCEPT ![Id].state = "uploading"
                                  , ![Id].sent = @ + 1]
-         /\ UNCHANGED<<monitor, devices, hs_to_device, device_to_hs>>
+         /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
          /\ unchanged_others
 
 DoWaitAck(unchanged_others) ==
@@ -209,7 +209,7 @@ DoWaitAck(unchanged_others) ==
       /\ peer_device_id = offer[Id].peer_device_id
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
       /\ offer' = [offer EXCEPT ![Id].state = "complete"]
-      /\ UNCHANGED<<monitor, devices, hs_to_device, device_to_hs>>
+      /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
       /\ unchanged_others
 
 ProcessToDeviceEvent(event) ==
@@ -279,7 +279,7 @@ Login1(unchanged_others) ==
    /\ Self.logged_in = "no"
    /\ DeviceToHS(Id)!Send([message |-> "Login",
                            contents |-> [ mx_id |-> Id ]]) (* TODO: simple device_id <=> mx_id mapping *)
-   /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.logged_in = "inprogress"]]
+   /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.logged_in = "inprogress"]]
    /\ UNCHANGED<<datachannel, offer, monitor, hs_to_device>>
    /\ unchanged_others
 
@@ -288,7 +288,7 @@ Login2(unchanged_others) ==
    /\ Self.logged_in = "inprogress"
    /\ HSToDevice(Id)!Discard
    /\ response.message = "LoginOK"
-   /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.logged_in = "yes", !.token = response.token]]
+   /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.logged_in = "yes", !.token = response.token]]
    /\ UNCHANGED<<datachannel, offer, monitor, device_to_hs>>
    /\ unchanged_others
 
@@ -297,7 +297,7 @@ Sync(unchanged_others) ==
    /\ ~Self.syncing
    /\ DeviceToHS(Id)!Send([message |-> "Sync",
                            contents |-> Self.token])
-   /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = TRUE]]
+   /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = TRUE]]
    /\ UNCHANGED<<datachannel, offer, monitor, hs_to_device>>
    /\ unchanged_others
 
@@ -317,12 +317,12 @@ ReceiveSync(unchanged_others) ==
    /\ LET event == HSToDevice(Id)!Get IN
       /\ HSToDevice(Id)!Discard
       /\ IF event \in Protocol!RoomEvent THEN
-            /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                            !.token = event.token]]
+            /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
+                                                          !.token = event.token]]
             /\ ProcessRoomEvent(event)
          ELSE
-            /\ devices' = [devices EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                            !.token = event.token]]
+            /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
+                                                          !.token = event.token]]
             /\ ProcessToDeviceEvent(event)
       /\ unchanged_others
 
