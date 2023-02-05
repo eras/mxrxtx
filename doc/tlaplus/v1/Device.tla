@@ -162,7 +162,7 @@ Offer ==
    , offer          : Protocol!OfferFiles
    , state          : { "disabled"
                       , "send-mxrxtx-offer"
-                      , "sent-mxrxtx-offer"
+                      , "waiting-mxrxtx-offer"
                       , "uploading"
                       , "complete"
                       }
@@ -184,7 +184,7 @@ DoOffer(unchanged_others) ==
       /\ DeviceToHS(Id)!Send([message  |-> "RoomMessage",
                               contents |-> [ offer |-> offer[Id].offer]])
       /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
-      /\ offer' = [offer EXCEPT ![Id].state = "sent-mxrxtx-offer"]
+      /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
       /\ UNCHANGED<<datachannel, monitor, hs_to_device>>
       /\ unchanged_others
 
@@ -208,12 +208,12 @@ DoWaitAck(unchanged_others) ==
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = offer[Id].peer_device_id
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
-      /\ offer' = [offer EXCEPT ![Id].state = "complete"]
+      /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
       /\ unchanged_others
 
 ProcessToDeviceEvent(event) ==
-   /\ offer[Id].state = "sent-mxrxtx-offer"
+   /\ offer[Id].state = "waiting-mxrxtx-offer"
    /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
                           , mx_id     |-> event.sender
                           , device_id |-> event.contents.device_id
