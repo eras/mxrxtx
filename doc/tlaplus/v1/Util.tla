@@ -51,6 +51,6 @@ SeqsOfLength(S, Lens) ==
 
 (* Easy way to dump a value while debugging *)
 Trace(x) ==
-  IF Print(x, TRUE) THEN x ELSE Assert(FALSE, "aiee")
+  IF PrintT(<<"trace", x>>) THEN x ELSE x
 
 ================================================================================
