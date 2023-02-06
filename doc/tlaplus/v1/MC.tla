@@ -37,6 +37,14 @@ EventuallyChannelsAreEmpty ==
 
 EventuallyMonitorHasDownloaded ==
    \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].state = "complete"))
+(* Every client synced the first message of the room *)
+SyncsStartFromBeginning ==
+   \A device_id \in DeviceId: <>(device[device_id].token.room = 1)
+
+(* If every client is syncing from the beginning, then all monitors in the end (on deadlock) will be in "complete" state *)
+EventuallyAllMonitorHaveDownloaded ==
+   SyncsStartFromBeginning => \A device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ <>[](monitor[device_id].state = "complete")))
+
 
 OfferHasUploadedDownloads ==
    \A device_id \in CanOffer: <>[](monitor[device_id].state = "complete" => offer[device_id].state = "complete")
