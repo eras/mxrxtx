@@ -11,12 +11,15 @@ LOCAL INSTANCE DataChannels
 LOCAL INSTANCE Naturals         (* + *)
 LOCAL INSTANCE Sequences        (* Append *)
 LOCAL INSTANCE SequencesExt     (* FoldSeq *)
+LOCAL INSTANCE Functions
 
 Protocol == INSTANCE Protocol
 
 Self == device[Id]
 
-TotalSizeOfOffer(offer_files) == FoldSeq(LAMBDA a, b: a.size + b, 0, offer_files)
+(* for more recent TLC, more recent SequencesExt? *)
+(* TotalSizeOfOffer(offer_files) == FoldSeq(LAMBDA a, b: a.size + b, 0, offer_files) *)
+TotalSizeOfOffer(offer_files) == FoldLeft(LAMBDA b, a: a.size + b, 0, offer_files)
 
 (* Returns a sequence of tuples <<index, begin_offset, end_offset>> *)
 CumulativeOfferFileSizes(offer_files) ==
@@ -88,7 +91,8 @@ EstablishSession ==
    /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
 
 TotalSizeOfReceived ==
-   FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[Id].received)
+   (* FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[Id].received) *)
+   FoldLeft(LAMBDA b, a: Len(a) + b, 0, monitor[Id].received)
 
 DoDownload ==
    /\ monitor[Id].state = "downloading"
