@@ -20,8 +20,8 @@ TypeOK ==
    /\ CheckTRUE("DataChannel", \A data_channel_id \in DataChannelId: DataChannel!TypeOK(data_channel_id))
 
 Next ==
-   \/ HS!Next(UNCHANGED<<device_vars>>)
-   \/ \E device_id \in DeviceId: Device(device_id)!Next(UNCHANGED<<hs_vars>>)
+   \/ HS!Next /\ UNCHANGED<<device_vars>>
+   \/ (\E device_id \in DeviceId: Device(device_id)!Next /\ UNCHANGED<<hs_vars>>)
 
 Init ==
    /\ HS!Init

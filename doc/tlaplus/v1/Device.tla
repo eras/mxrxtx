@@ -73,7 +73,7 @@ ProcessRoomEvent(room_event) ==
    ELSE
       UNCHANGED<<datachannel, device_to_hs, monitor>>
 
-EstablishSession(unchanged_others) ==
+EstablishSession ==
    /\ monitor[Id].state = "has-mxrxtx-offer"
    /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
                           , mx_id     |-> monitor[Id].peer_mx_id
@@ -86,12 +86,11 @@ EstablishSession(unchanged_others) ==
                    ![Id].state = "sent-webrtc-offer"
                  ]
    /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
-   /\ unchanged_others
 
 TotalSizeOfReceived ==
    FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[Id].received)
 
-DoDownload(unchanged_others) ==
+DoDownload ==
    /\ monitor[Id].state = "downloading"
    /\ TotalSizeOfReceived < TotalSizeOfOffer(monitor[Id].offer)
    /\ \E peer_device_id \in DeviceId:
@@ -100,13 +99,12 @@ DoDownload(unchanged_others) ==
       /\ DataChannel!A(peer_device_id, Id, "data")!Recv(message)
       /\ monitor' = [monitor EXCEPT ![Id].received[CurrentOfferFileIndexOffset(TotalSizeOfReceived, monitor[Id].offer).index] = Append(@, message.data)]
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
-      /\ unchanged_others
 
 ValidateChecksum ==
    (* TODO *)
    TRUE
 
-DoSendAck(unchanged_others) ==
+DoSendAck ==
    /\ monitor[Id].state = "downloading"
    /\ TotalSizeOfReceived = TotalSizeOfOffer(monitor[Id].offer)
    /\ \E peer_device_id \in DeviceId:
@@ -115,7 +113,6 @@ DoSendAck(unchanged_others) ==
       /\ monitor' = [monitor EXCEPT ![Id].state = "complete"]
       /\ Assert(ValidateChecksum, "Checksum validation failed")
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
-      /\ unchanged_others
 
 ProcessToDeviceEvent(event) ==
    /\ monitor[Id].state = "sent-webrtc-offer"
@@ -137,10 +134,10 @@ InitValue ==
 Init ==
    /\ monitor[Id] = InitValue
 
-Next(unchanged_others) ==
-   \/ EstablishSession(unchanged_others)
-   \/ DoDownload(unchanged_others)
-   \/ DoSendAck(unchanged_others)
+Next ==
+   \/ EstablishSession
+   \/ DoDownload
+   \/ DoSendAck
 
 ================================================================================
 
@@ -162,7 +159,7 @@ Offer ==
 TypeOK ==
    /\ CheckTRUE("offer", offer[Id] \in Offer)
 
-DoOffer(unchanged_others) ==
+DoOffer ==
    /\ Id \in CanOffer
    /\ Self.logged_in = "yes"
    /\ offer[Id].state = "send-mxrxtx-offer"
@@ -177,11 +174,10 @@ DoOffer(unchanged_others) ==
       /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
       /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
       /\ UNCHANGED<<datachannel, monitor, hs_to_device>>
-      /\ unchanged_others
 
 TotalSizeOfSent == offer[Id].sent
 
-DoUpload(unchanged_others) ==
+DoUpload ==
    /\ offer[Id].state = "uploading"
    /\ TotalSizeOfSent < TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
@@ -191,9 +187,8 @@ DoUpload(unchanged_others) ==
          /\ offer' = [offer EXCEPT ![Id].state = "uploading"
                                  , ![Id].sent = @ + 1]
          /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
-         /\ unchanged_others
 
-DoWaitAck(unchanged_others) ==
+DoWaitAck ==
    /\ offer[Id].state = "uploading"
    /\ TotalSizeOfSent = TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
@@ -201,7 +196,6 @@ DoWaitAck(unchanged_others) ==
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
       /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
-      /\ unchanged_others
 
 ProcessToDeviceEvent(event) ==
    /\ offer[Id].state = "waiting-mxrxtx-offer"
@@ -232,10 +226,10 @@ InitValue ==
 Init ==
    /\ offer[Id] = InitValue
 
-Next(unchanged_others) ==
-   \/ DoOffer(unchanged_others)
-   \/ DoUpload(unchanged_others)
-   \/ DoWaitAck(unchanged_others)
+Next ==
+   \/ DoOffer
+   \/ DoUpload
+   \/ DoWaitAck
 
 ================================================================================
 
@@ -266,31 +260,28 @@ InitValue ==
     offering  |-> FALSE,
     token     |-> NoToken]
 
-Login1(unchanged_others) ==
+Login1 ==
    /\ Self.logged_in = "no"
    /\ DeviceToHS(Id)!Send([message |-> "Login",
                            contents |-> [ mx_id |-> Id ]]) (* TODO: simple device_id <=> mx_id mapping *)
    /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.logged_in = "inprogress"]]
    /\ UNCHANGED<<datachannel, offer, monitor, hs_to_device>>
-   /\ unchanged_others
 
-Login2(unchanged_others) ==
+Login2 ==
    LET response == HSToDevice(Id)!Get IN
    /\ Self.logged_in = "inprogress"
    /\ HSToDevice(Id)!Discard
    /\ response.message = "LoginOK"
    /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.logged_in = "yes", !.token = response.token]]
    /\ UNCHANGED<<datachannel, offer, monitor, device_to_hs>>
-   /\ unchanged_others
 
-Sync(unchanged_others) ==
+Sync ==
    /\ Self.logged_in = "yes"
    /\ ~Self.syncing
    /\ DeviceToHS(Id)!Send([message |-> "Sync",
                            contents |-> Self.token])
    /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = TRUE]]
    /\ UNCHANGED<<datachannel, offer, monitor, hs_to_device>>
-   /\ unchanged_others
 
 ProcessRoomEvent(room_event) ==
    /\ Monitor!ProcessRoomEvent(room_event)
@@ -302,7 +293,7 @@ ProcessToDeviceEvent(todevice_event) ==
    \/ /\ Offer!ProcessToDeviceEvent(todevice_event)
       /\ UNCHANGED<<datachannel, monitor>>
 
-ReceiveSync(unchanged_others) ==
+ReceiveSync ==
    /\ Self.logged_in = "yes"
    /\ Self.syncing
    /\ LET event == HSToDevice(Id)!Get IN
@@ -315,13 +306,12 @@ ReceiveSync(unchanged_others) ==
             /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
                                                           !.token = event.token]]
             /\ ProcessToDeviceEvent(event)
-      /\ unchanged_others
 
-Next(unchanged_others) ==
-   \/ Login1(unchanged_others)
-   \/ Login2(unchanged_others)
-   \/ Sync(unchanged_others)
-   \/ Offer!Next(unchanged_others)
-   \/ Monitor!Next(unchanged_others)
-   \/ ReceiveSync(unchanged_others)
+Next ==
+   \/ Login1
+   \/ Login2
+   \/ Sync
+   \/ Offer!Next
+   \/ Monitor!Next
+   \/ ReceiveSync
 ================================================================================

@@ -45,7 +45,7 @@ Init ==
    /\ hs_device_mx_id = [device_id \in DeviceId |-> InvalidId]
    /\ hs_device_sync_token = [device_id \in DeviceId |-> NoToken]
 
-ProcessLogin(unchanged_others) ==
+ProcessLogin ==
    \E device_id \in DeviceId:
    LET event == DeviceToHS(device_id)!Get IN
    /\ ~IsDeviceLoggedIn(device_id)
@@ -56,9 +56,8 @@ ProcessLogin(unchanged_others) ==
                                   token   |-> [room     |-> Len(hs_room) + 1,
                                                todevice |-> Len(hs_todevice[device_id]) + 1]])
    /\ UNCHANGED<<hs_device_sync_token, hs_room, hs_todevice>>
-   /\ unchanged_others
 
-ProcessSync(unchanged_others) ==
+ProcessSync ==
    \E device_id \in DeviceId:
    LET event == DeviceToHS(device_id)!Get IN
    /\ DeviceToHS(device_id)!Discard
@@ -66,9 +65,8 @@ ProcessSync(unchanged_others) ==
    /\ Assert(hs_device_sync_token[device_id] = NoToken, <<"Device", device_id, "tried to sync while it was already syncing">>)
    /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = event.contents]
    /\ UNCHANGED<<hs_to_device, hs_room, hs_todevice, hs_device_mx_id>>
-   /\ unchanged_others
 
-ProcessRoomMessage(unchanged_others) ==
+ProcessRoomMessage ==
    \E device_id \in DeviceId:
    LET message == DeviceToHS(device_id)!Get IN
    /\ DeviceToHS(device_id)!Discard
@@ -76,9 +74,8 @@ ProcessRoomMessage(unchanged_others) ==
    /\ hs_room' = hs_room \o <<[sender   |-> hs_device_mx_id[device_id],
                                contents |-> message.contents]>>
    /\ UNCHANGED<<hs_device_sync_token, hs_to_device, hs_todevice, hs_device_mx_id>>
-   /\ unchanged_others
 
-ProcessToDevice(unchanged_others) ==
+ProcessToDevice ==
    \E from_device_id \in DeviceId:
    LET event == DeviceToHS(from_device_id)!Get IN
    /\ DeviceToHS(from_device_id)!Discard
@@ -93,9 +90,8 @@ ProcessToDevice(unchanged_others) ==
                          hs_todevice[device_id]
                       ]
    /\ UNCHANGED<<hs_device_sync_token, hs_to_device, hs_device_mx_id, hs_room>>
-   /\ unchanged_others
 
-SendSyncResponses(unchanged_others) ==
+SendSyncResponses ==
    \E device_id \in DeviceId:
    LET token == Check(Token, hs_device_sync_token[device_id]) IN
    /\ token # NoToken
@@ -116,12 +112,11 @@ SendSyncResponses(unchanged_others) ==
          (* easier to see synced messages.. *)
          /\ hs_todevice' = [hs_todevice EXCEPT ![device_id][token.todevice] = [synced |-> {}]]
    /\ UNCHANGED<<hs_device_mx_id, device_to_hs, hs_room>>
-   /\ unchanged_others
 
-Next(unchanged_others) ==
-   \/ ProcessLogin(unchanged_others)
-   \/ ProcessSync(unchanged_others)
-   \/ ProcessRoomMessage(unchanged_others)
-   \/ ProcessToDevice(unchanged_others)
-   \/ SendSyncResponses(unchanged_others)
+Next ==
+   \/ ProcessLogin
+   \/ ProcessSync
+   \/ ProcessRoomMessage
+   \/ ProcessToDevice
+   \/ SendSyncResponses
 ================================================================================
