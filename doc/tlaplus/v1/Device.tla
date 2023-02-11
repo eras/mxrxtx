@@ -323,13 +323,11 @@ ReceiveSync ==
    /\ LET event == HSToDevice(Id)!Get IN
       /\ HSToDevice(Id)!Discard
       /\ IF event \in Protocol!RoomEvent THEN
-            /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                          !.token = event.token]]
             /\ ProcessRoomEvent(event)
          ELSE
-            /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
-                                                          !.token = event.token]]
             /\ ProcessToDeviceEvent(event)
+      /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
+                                                    !.token = event.token]]
 
 Next ==
    \/ Login1
