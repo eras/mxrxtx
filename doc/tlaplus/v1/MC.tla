@@ -12,7 +12,7 @@ MCInit ==
                  Check(Device(device_id)!Type,
                        Device(device_id)!InitValue) ]
 
-MCSpec == MCInit /\ Init /\ [][Next]_all_vars
+MCSpec == MCInit /\ Init /\ [][Next]_all_vars /\ Liveness
 
 (* Eventually all offering nodes will be offering, if there is nothing else the state machine can do *)
 EventuallyOffer ==

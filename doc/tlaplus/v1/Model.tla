@@ -23,6 +23,10 @@ Next ==
    \/ HS!Next /\ UNCHANGED<<device_vars>>
    \/ (\E device_id \in DeviceId: Device(device_id)!Next /\ UNCHANGED<<hs_vars>>)
 
+Liveness ==
+  /\ HS!Liveness
+  /\ \A device_id \in DeviceId: Device(device_id)!Liveness
+
 Init ==
    /\ HS!Init
    /\ monitor = [device_id \in DeviceId |-> Device(device_id)!Monitor!InitValue]
@@ -31,6 +35,6 @@ Init ==
    /\ InitDeviceHSChannels
    /\ InitDataChannels
 
-Spec == Init /\ [][Next]_all_vars
+Spec == Init /\ [][Next]_all_vars /\ Liveness
 
 ================================================================================

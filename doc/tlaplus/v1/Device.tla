@@ -336,4 +336,7 @@ Next ==
    \/ Offer!Next
    \/ Monitor!Next
    \/ ReceiveSync
+
+Liveness ==
+   /\ WF_<<device_vars, hs_to_device, device_to_hs>>(Next)
 ================================================================================

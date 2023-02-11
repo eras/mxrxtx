@@ -119,4 +119,7 @@ Next ==
    \/ ProcessRoomMessage
    \/ ProcessToDevice
    \/ SendSyncResponses
+
+Liveness ==
+   /\ WF_<<hs_vars, hs_to_device, device_to_hs>>(Next)
 ================================================================================
