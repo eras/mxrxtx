@@ -62,7 +62,7 @@ Sync ==
 (* Send a message to a device *)
 ToDeviceContentsWebRTC ==
    [ message   : {"WebRTC"}
-   , webrtc    : {"offer", "answer"}
+   , webrtc    : {"offer", "answer", "established"}
    , device_id : {0} \cup DeviceId
    ]
 

@@ -117,11 +117,20 @@ DoSendAck ==
 ProcessToDeviceEvent(event) ==
    /\ monitor[Id].state = "sent-webrtc-offer"
    /\ Assert(event.sender = monitor[Id].peer_mx_id, "Peer mx id is unexpected")
+   /\ Assert(event.contents.message = "WebRTC", "Unexpected todevice message")
+   /\ Assert(event.contents.webrtc = "answer", "Unexpected todevice message")
    /\ monitor' = [monitor EXCEPT
                    ![Id].state = "downloading"
                  , ![Id].peer_device_id = event.contents.device_id
                  ]
-   /\ UNCHANGED<<datachannel, device_to_hs>>
+   /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
+                          , mx_id     |-> monitor[Id].peer_mx_id
+                          , device_id |-> event.contents.device_id
+                          , contents  |-> [ message   |-> "WebRTC"
+                                          , webrtc    |-> "established"
+                                          , device_id |-> 0 ]
+                          ])
+   /\ UNCHANGED<<datachannel>>
 
 InitValue ==
    [ offer          |-> <<>>
@@ -150,7 +159,8 @@ Offer ==
    , offer          : Protocol!OfferFiles
    , state          : { "disabled"
                       , "send-mxrxtx-offer"
-                      , "waiting-mxrxtx-offer"
+                      , "waiting-webrtc-offer"
+                      , "waiting-webrtc-establish"
                       , "uploading"
                       , "complete"
                       }
@@ -172,13 +182,14 @@ DoOffer ==
       /\ DeviceToHS(Id)!Send([message  |-> "RoomMessage",
                               contents |-> [ offer |-> offer[Id].offer]])
       /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
-      /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
+      /\ offer' = [offer EXCEPT ![Id].state = "waiting-webrtc-offer"]
       /\ UNCHANGED<<datachannel, monitor, hs_to_device>>
 
 TotalSizeOfSent == offer[Id].sent
 
 DoUpload ==
    /\ offer[Id].state = "uploading"
+   /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
    /\ TotalSizeOfSent < TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = offer[Id].peer_device_id
@@ -190,27 +201,36 @@ DoUpload ==
 
 DoWaitAck ==
    /\ offer[Id].state = "uploading"
+   /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
    /\ TotalSizeOfSent = TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = offer[Id].peer_device_id
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
-      /\ offer' = [offer EXCEPT ![Id].state = "waiting-mxrxtx-offer"]
+      /\ offer' = [offer EXCEPT ![Id].state = "waiting-webrtc-offer"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
 
 ProcessToDeviceEvent(event) ==
-   /\ offer[Id].state = "waiting-mxrxtx-offer"
-   /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
-                          , mx_id     |-> event.sender
-                          , device_id |-> event.contents.device_id
-                          , contents  |-> [ message   |-> "WebRTC"
-                                          , webrtc    |-> "answer"
-                                          , device_id |-> Id ]
-                          ])
-   /\ offer' = [offer EXCEPT
-                  ![Id].state = "uploading"
-                , ![Id].peer_mx_id = event.sender
-                , ![Id].peer_device_id = event.contents.device_id
-                ]
+   /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
+   /\ event.contents.message = "WebRTC"
+   /\ \/ /\ offer[Id].state = "waiting-webrtc-offer"
+         /\ event.contents.webrtc = "offer"
+         /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
+                                , mx_id     |-> event.sender
+                                , device_id |-> event.contents.device_id
+                                , contents  |-> [ message   |-> "WebRTC"
+                                                , webrtc    |-> "answer"
+                                                , device_id |-> Id ]
+                                ])
+         /\ offer' = [offer EXCEPT
+                        ![Id].state = "waiting-webrtc-establish"
+                      , ![Id].peer_mx_id = event.sender
+                      , ![Id].peer_device_id = event.contents.device_id
+                      ]
+      \/ /\ offer[Id].state = "waiting-webrtc-establish"
+         /\ event.contents.webrtc = "established"
+         /\ Assert(offer[Id].peer_mx_id = event.sender, "Implement multisession transfers")
+         /\ offer' = [offer EXCEPT ![Id].state = "uploading"]
+         /\ UNCHANGED <<device_to_hs>>
 
 InitValue ==
    [ peer_mx_id     |-> 0
