@@ -1,20 +1,11 @@
 ---- MODULE HS -----------------------------------------------------------------
-EXTENDS Constants
+EXTENDS Base
 (* Documentation *)
 --------------------------------------------------------------------------------
-
-VARIABLES
-   hs_room
- , hs_todevice
- , hs_to_device
- , hs_device_mx_id
- , hs_device_sync_token
- , device_to_hs
 
 LOCAL INSTANCE TLC
 LOCAL INSTANCE Naturals
 LOCAL INSTANCE Sequences
-LOCAL INSTANCE Common
 LOCAL INSTANCE DeviceHSChannels
 LOCAL INSTANCE Util
 

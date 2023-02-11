@@ -1,18 +1,9 @@
 ---- MODULE Device -------------------------------------------------------------
-EXTENDS Constants
+EXTENDS Base
 --------------------------------------------------------------------------------
 CONSTANT
    Id
 
-VARIABLES
-   device
- , hs_to_device
- , device_to_hs
- , monitor
- , offer
- , datachannel
-
-LOCAL INSTANCE Common
 LOCAL INSTANCE TLC
 LOCAL INSTANCE Util
 LOCAL INSTANCE DeviceHSChannels
