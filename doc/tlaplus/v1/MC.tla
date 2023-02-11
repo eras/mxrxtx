@@ -23,6 +23,9 @@ EventuallyOffer ==
 AnOfferIsMade ==
    \E device_id \in CanOffer: device_to_hs[device_id] \in Protocol!RoomMessage
 
+EventuallyAnOfferIsMade ==
+   <>AnOfferIsMade
+
 (* Eventually all monitoring nodes have an offer, if there is nothing else the state machine can do *)
 EventuallyMonitorHasOffer ==
    \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].offer # <<>>))
@@ -36,8 +39,6 @@ EventuallyChannelsAreEmpty ==
          <>[](~ENABLED(Next) =>
               datachannel[data_channel_id] = <<>>)
 
-EventuallyMonitorHasDownloaded ==
-   \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].state = "complete"))
 EventuallyChannelsAreNotEmpty == ~EventuallyChannelsAreEmpty
 
 (* Every client synced the first message of the room *)
@@ -45,8 +46,10 @@ SyncsStartFromBeginning ==
    \A device_id \in DeviceId: <>(device[device_id].token.room = 1)
 
 (* If every client is syncing from the beginning, then all monitors in the end (on deadlock) will be in "complete" state *)
-EventuallyAllMonitorHaveDownloaded ==
-   SyncsStartFromBeginning => \A device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ <>[](monitor[device_id].state = "complete")))
+EventuallyAllMonitorsHaveDownloaded ==
+   <> /\ AnOfferIsMade
+      /\ \A device_id \in CanMonitor:
+         device[device_id].token.room = 1 ~> (monitor[device_id].state = "complete")
 
 (* If every client is syncing from the beginning, then some monitors in the end (on deadlock) will not be in "complete" state *)
 (* Not sure if this works *)
