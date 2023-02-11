@@ -8,7 +8,9 @@ Device(device_id) == INSTANCE Device WITH Id <- device_id
 
 INSTANCE DeviceHSChannels
 INSTANCE DataChannels
-
+LOCAL INSTANCE Json
+LOCAL INSTANCE TLC
+LOCAL INSTANCE Sequences
 
 HS == INSTANCE HS
 
@@ -37,4 +39,37 @@ Init ==
 
 Spec == Init /\ [][Next]_all_vars /\ Liveness
 
+AllMessages ==
+   UNION {
+      UNION {
+         UNION {
+           {{<<"server", 1>>} \X {<<"device", device_id>>} \X HSToDevice(device_id)!Sending}
+         , {{<<"device", device_id>>} \X {<<"server", 1>>} \X DeviceToHS(device_id)!Sending}
+         } : device_id \in DeviceId
+      },
+      UNION {
+         UNION {
+           {{<<"device", a>>} \X {<<"device", b>>} \X DataChannel!A(a, b, label)!Sending}
+         , {{<<"device", b>>} \X {<<"device", a>>} \X DataChannel!A(b, a, label)!Sending}
+         } : <<a, b, label>> \in DataChannelId
+      }
+   }
+
+State ==
+   [ server |-> <<[room |-> Len(hs_room),
+                   todevice |-> [device_id \in DeviceId |-> hs_todevice[device_id]],
+                   syncing |-> [device_id \in {device_id \in DeviceId: hs_device_sync_token[device_id] # NoToken} |->
+                                hs_device_sync_token[device_id]]]>>
+   , device |-> [id \in DeviceId |->
+                 [ offer   |-> offer[id].state
+                 , monitor |-> monitor[id].state
+                 ]]
+   ]
+
+AliasMessages ==
+   [
+     (* lane_order_json |-> ToJson(<<"client", "server">>) *)
+     messages_json |-> ToJson(AllMessages)
+   , state_json |-> ToJson(State)
+   ]
 ================================================================================

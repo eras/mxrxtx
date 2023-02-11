@@ -4,6 +4,7 @@ EXTENDS Model
 LOCAL INSTANCE Util
 LOCAL INSTANCE Naturals
 LOCAL INSTANCE Sequences
+LOCAL INSTANCE FiniteSets
 
 Protocol == INSTANCE Protocol
 
@@ -37,6 +38,8 @@ EventuallyChannelsAreEmpty ==
 
 EventuallyMonitorHasDownloaded ==
    \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].state = "complete"))
+EventuallyChannelsAreNotEmpty == ~EventuallyChannelsAreEmpty
+
 (* Every client synced the first message of the room *)
 SyncsStartFromBeginning ==
    \A device_id \in DeviceId: <>(device[device_id].token.room = 1)
@@ -45,6 +48,13 @@ SyncsStartFromBeginning ==
 EventuallyAllMonitorHaveDownloaded ==
    SyncsStartFromBeginning => \A device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ <>[](monitor[device_id].state = "complete")))
 
+(* If every client is syncing from the beginning, then some monitors in the end (on deadlock) will not be in "complete" state *)
+(* Not sure if this works *)
+EventuallyAllMonitorHaveNotDownloaded ==
+   SyncsStartFromBeginning => \E device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ ~(monitor[device_id].state = "complete")))
+
+NotAllMonitorsAreComplete ==
+   Cardinality({device_id \in CanMonitor: monitor[device_id].state = "complete"}) < Cardinality(CanMonitor)
 
 OfferHasUploadedDownloads ==
    \A device_id \in CanOffer: <>[](monitor[device_id].state = "complete" => offer[device_id].state = "complete")
