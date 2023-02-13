@@ -113,6 +113,17 @@ SendSyncResponses ==
          /\ hs_todevice' = [hs_todevice EXCEPT ![device_id][token.todevice] = [synced |-> {}]]
    /\ UNCHANGED<<hs_device_mx_id, device_to_hs, hs_room>>
 
+(* An invariant that a HS is always able to receive input *)
+(* Defined here as it's rather closely related to spec *)
+NeverBlocks ==
+   \A device_id \in DeviceId:
+      DeviceToHS(device_id)!Busy =>
+         \/ ENABLED(ProcessLogin)
+         \/ ENABLED(ProcessSync)
+         \/ ENABLED(ProcessToDevice)
+         \/ ENABLED(ProcessRoomMessage)
+         \/ ENABLED(ProcessToDevice)
+
 Next ==
    \/ ProcessLogin
    \/ ProcessSync

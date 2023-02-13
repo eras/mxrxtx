@@ -329,6 +329,13 @@ ReceiveSync ==
       /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
                                                     !.token = event.token]]
 
+(* An invariant that a Device is always able to receive input *)
+(* Defined here as it's rather closely related to spec *)
+NeverBlocks ==
+   HSToDevice(Id)!Busy =>
+      \/ ENABLED(Login2)
+      \/ ENABLED(ReceiveSync)
+
 Next ==
    \/ Login1
    \/ Login2

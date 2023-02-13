@@ -70,4 +70,9 @@ DownloadedFilesAreCorrect ==
             /\ monitor[monitor_id].received =
                   [index \in DOMAIN(offer[offer_id].offer) |->
                    offer[offer_id].offer[index].checksum[2]]
+
+(* These imply we don't need buffered channels for this model, as reading MChannel never blocks *)
+HSNeverBlocks == HS!NeverBlocks
+DeviceNeverBlocks == \A device_id \in DeviceId: Device(device_id)!NeverBlocks
+
 ================================================================================
