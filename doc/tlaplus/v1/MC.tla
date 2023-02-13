@@ -41,6 +41,17 @@ EventuallyChannelsAreEmpty ==
 
 EventuallyChannelsAreNotEmpty == ~EventuallyChannelsAreEmpty
 
+EventuallyAllOffersComplete ==
+   \A device_id_ofr \in CanOffer:
+      <>[](
+         /\ offer[device_id_ofr].state = "sent-mxrxtx-offer"
+         /\ <>(\* Consider only the case where monitors are able to see the first message
+               \A device_id_mon \in CanMonitor:
+               device[device_id_mon].token.room = 1 ~>
+                  \E session_id \in SessionId:
+                  offer[device_id_ofr].session[session_id].state = "complete")
+      )
+
 (* Every client synced the first message of the room *)
 SyncsStartFromBeginning ==
    \A device_id \in DeviceId: <>(device[device_id].token.room = 1)

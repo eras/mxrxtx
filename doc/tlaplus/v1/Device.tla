@@ -245,8 +245,15 @@ DoWaitAck ==
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = offer[Id].session[session_id].peer_device_id
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
-      /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "waiting-webrtc-offer"]
+      /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "complete"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
+
+(* This state handler is just to make it simpler to see when one session is complete *)
+DoReset ==
+   \E session_id \in SessionId:
+   /\ offer[Id].session[session_id].state = "complete"
+   /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "waiting-webrtc-offer"]
+   /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs, datachannel>>
 
 ProcessToDeviceEvent(event) ==
    \E session_id \in SessionId:
@@ -299,6 +306,7 @@ Next ==
    \/ DoOffer
    \/ DoUpload
    \/ DoWaitAck
+   \/ DoReset
 
 State ==
    [ state    |-> offer[Id].state
