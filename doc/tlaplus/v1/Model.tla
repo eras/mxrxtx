@@ -60,10 +60,7 @@ State ==
                    todevice |-> [device_id \in DeviceId |-> hs_todevice[device_id]],
                    syncing |-> [device_id \in {device_id \in DeviceId: hs_device_sync_token[device_id] # NoToken} |->
                                 hs_device_sync_token[device_id]]]>>
-   , device |-> [id \in DeviceId |->
-                 [ offer   |-> offer[id].state
-                 , monitor |-> monitor[id].state
-                 ]]
+   , device |-> [id \in DeviceId |-> Device(id)!State]
    ]
 
 AliasMessages ==

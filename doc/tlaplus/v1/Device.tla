@@ -168,6 +168,8 @@ Next ==
    \/ DoDownload
    \/ DoSendAck
 
+State == monitor[Id].state
+
 ================================================================================
 
 ---- MODULE Offer --------------------------------------------------------------
@@ -298,6 +300,11 @@ Next ==
    \/ DoUpload
    \/ DoWaitAck
 
+State ==
+   [ state    |-> offer[Id].state
+   , sessions |-> [ session_id \in SessionId |-> offer[Id].session[session_id].state ]
+   ]
+
 ================================================================================
 
 Monitor == INSTANCE Monitor
@@ -371,6 +378,10 @@ ReceiveSync ==
             /\ ProcessToDeviceEvent(event)
       /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.syncing = FALSE,
                                                     !.token = event.token]]
+
+State ==
+   [ offer |-> Offer!State,
+     monitor |-> Monitor!State ]
 
 (* An invariant that a Device is always able to receive input *)
 (* Defined here as it's rather closely related to spec *)
