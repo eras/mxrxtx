@@ -4,6 +4,7 @@
 CONSTANT
    DeviceId
  , MxId
+ , SessionId
  , NumBaseTokens
  , FileData
  , FileSize
@@ -63,6 +64,7 @@ Sync ==
 ToDeviceContentsWebRTC ==
    [ message   : {"WebRTC"}
    , webrtc    : {"offer", "answer", "established"}
+   , session_id: SessionId
    , device_id : {0} \cup DeviceId
    ]
 

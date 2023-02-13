@@ -44,6 +44,16 @@ CurrentOfferFileIndexOffset(offset, offer_files) ==
      [ offset |-> offset - file_ofs1_ofs2[2]
      , index  |-> file_ofs1_ofs2[1] ] (* pick the index of the file in the offer_files and receive *)
 
+(* List of session ids used globally; used for emulating UUIDs *)
+UsedSessionIds ==
+   { session_id \in SessionId:
+     \E device_id \in DeviceId:
+        \/ monitor[device_id].session_id = session_id
+   }
+
+AvailableSessionIds ==
+   SessionId \ UsedSessionIds
+
 ---- MODULE Monitor ------------------------------------------------------------
 --------------------------------------------------------------------------------
 Monitor ==
@@ -58,6 +68,7 @@ Monitor ==
                       , "downloading"
                       , "complete"
                       }
+   , session_id     : {0} \cup SessionId
    ]
 
 TypeOK ==
@@ -78,17 +89,20 @@ ProcessRoomEvent(room_event) ==
 
 EstablishSession ==
    /\ monitor[Id].state = "has-mxrxtx-offer"
-   /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
-                          , mx_id     |-> monitor[Id].peer_mx_id
-                          , device_id |-> 0
-                          , contents  |-> [ message   |-> "WebRTC"
-                                          , webrtc    |-> "offer"
-                                          , device_id |-> Id ]
-                          ])
-   /\ monitor' = [monitor EXCEPT
-                   ![Id].state = "sent-webrtc-offer"
-                 ]
-   /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
+   /\ LET session_id == CHOOSE session_id \in AvailableSessionIds: TRUE IN
+      /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
+                             , mx_id     |-> monitor[Id].peer_mx_id
+                             , device_id |-> 0
+                             , contents  |-> [ message    |-> "WebRTC"
+                                             , session_id |-> session_id
+                                             , webrtc     |-> "offer"
+                                             , device_id  |-> Id ]
+                             ])
+      /\ monitor' = [monitor EXCEPT
+                      ![Id].state      = "sent-webrtc-offer"
+                    , ![Id].session_id = session_id
+                    ]
+      /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
 
 TotalSizeOfReceived ==
    (* FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[Id].received) *)
@@ -130,9 +144,10 @@ ProcessToDeviceEvent(event) ==
    /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
                           , mx_id     |-> monitor[Id].peer_mx_id
                           , device_id |-> event.contents.device_id
-                          , contents  |-> [ message   |-> "WebRTC"
-                                          , webrtc    |-> "established"
-                                          , device_id |-> 0 ]
+                          , contents  |-> [ message    |-> "WebRTC"
+                                          , session_id |-> monitor[Id].session_id
+                                          , webrtc     |-> "established"
+                                          , device_id  |-> 0 ]
                           ])
    /\ UNCHANGED<<datachannel>>
 
@@ -142,6 +157,7 @@ InitValue ==
    , peer_device_id |-> 0
    , received       |-> <<>>
    , state          |-> IF Id \in CanMonitor THEN "wait-mxrxtx-offer" ELSE "disabled"
+   , session_id     |-> 0
    ]
 
 Init ==
@@ -156,19 +172,27 @@ Next ==
 
 ---- MODULE Offer --------------------------------------------------------------
 --------------------------------------------------------------------------------
-Offer ==
+UploadSession ==
    [ peer_mx_id     : {0} \cup MxId
    , peer_device_id : {0} \cup DeviceId
-   , sent           : Nat
-   , offer          : Protocol!OfferFiles
-   , state          : { "disabled"
-                      , "send-mxrxtx-offer"
+   , state          : { ""
                       , "waiting-webrtc-offer"
                       , "waiting-webrtc-establish"
                       , "uploading"
                       , "complete"
                       }
+   , sent           : Nat
    ]
+
+Offer ==
+   [ offer          : Protocol!OfferFiles
+   , state          : { "disabled"
+                      , "send-mxrxtx-offer"
+                      , "sent-mxrxtx-offer"
+                      }
+   , session        : [SessionId -> UploadSession]
+   ]
+
 
 TypeOK ==
    /\ CheckTRUE("offer", offer[Id] \in Offer)
@@ -185,66 +209,85 @@ DoOffer ==
       (*                         contents |-> << RandomElement(Protocol!OfferFile) >>]) *)
       /\ DeviceToHS(Id)!Send([message  |-> "RoomMessage",
                               contents |-> [ offer |-> offer[Id].offer]])
-      /\ device' = [device EXCEPT ![Id] = [@ EXCEPT !.offering = TRUE]]
-      /\ offer' = [offer EXCEPT ![Id].state = "waiting-webrtc-offer"]
+      /\ device' = [device EXCEPT ![Id].offering = TRUE]
+      /\ offer' = [offer EXCEPT
+                    ![Id].state = "sent-mxrxtx-offer"
+                    (* All sessions are set to "waiting-webrtc-offer" *)
+                  , ![Id].session = [ session_id \in SessionId |->
+                                      [offer[Id].session[session_id] EXCEPT
+                                       !.state = "waiting-webrtc-offer"] ]
+                  ]
       /\ UNCHANGED<<datachannel, monitor, hs_to_device>>
 
-TotalSizeOfSent == offer[Id].sent
+TotalSizeOfSent(session_id) == offer[Id].session[session_id].sent
 
 DoUpload ==
-   /\ offer[Id].state = "uploading"
+   \E session_id \in SessionId:
+   /\ offer[Id].session[session_id].state = "uploading"
    /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
-   /\ TotalSizeOfSent < TotalSizeOfOffer(offer[Id].offer)
+   /\ TotalSizeOfSent(session_id) < TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
-      /\ peer_device_id = offer[Id].peer_device_id
-      /\ LET index_offset == CurrentOfferFileIndexOffset(TotalSizeOfSent, offer[Id].offer) IN
+      /\ peer_device_id = offer[Id].session[session_id].peer_device_id
+      /\ LET index_offset == CurrentOfferFileIndexOffset(TotalSizeOfSent(session_id), offer[Id].offer) IN
          /\ DataChannel!A(Id, peer_device_id, "data")!Send([data |-> offer[Id].offer[index_offset.index].checksum[2][index_offset.offset + 1]])
-         /\ offer' = [offer EXCEPT ![Id].state = "uploading"
-                                 , ![Id].sent = @ + 1]
+         /\ offer' = [offer EXCEPT ![Id].session = [@ EXCEPT ![session_id].state = "uploading"
+                                                           , ![session_id].sent = @ + 1]
+                     ]
          /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
 
 DoWaitAck ==
-   /\ offer[Id].state = "uploading"
+   \E session_id \in SessionId:
+   /\ offer[Id].session[session_id].state = "uploading"
    /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
-   /\ TotalSizeOfSent = TotalSizeOfOffer(offer[Id].offer)
+   /\ TotalSizeOfSent(session_id) = TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
-      /\ peer_device_id = offer[Id].peer_device_id
+      /\ peer_device_id = offer[Id].session[session_id].peer_device_id
       /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
-      /\ offer' = [offer EXCEPT ![Id].state = "waiting-webrtc-offer"]
+      /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "waiting-webrtc-offer"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
 
 ProcessToDeviceEvent(event) ==
+   \E session_id \in SessionId:
    /\ Assert(Self.logged_in = "yes", "Must be logged in by this point")
+   /\ event.contents.session_id = session_id
    /\ event.contents.message = "WebRTC"
-   /\ \/ /\ offer[Id].state = "waiting-webrtc-offer"
+   /\ \/ /\ offer[Id].session[session_id].state = "waiting-webrtc-offer"
          /\ event.contents.webrtc = "offer"
          /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
                                 , mx_id     |-> event.sender
                                 , device_id |-> event.contents.device_id
-                                , contents  |-> [ message   |-> "WebRTC"
-                                                , webrtc    |-> "answer"
-                                                , device_id |-> Id ]
+                                , contents  |-> [ message    |-> "WebRTC"
+                                                , session_id |-> session_id
+                                                , webrtc     |-> "answer"
+                                                , device_id  |-> Id ]
                                 ])
          /\ offer' = [offer EXCEPT
-                        ![Id].state = "waiting-webrtc-establish"
-                      , ![Id].peer_mx_id = event.sender
-                      , ![Id].peer_device_id = event.contents.device_id
+                        ![Id].session = [@ EXCEPT
+                           ![session_id].state = "waiting-webrtc-establish"
+                         , ![session_id].peer_mx_id = event.sender
+                         , ![session_id].peer_device_id = event.contents.device_id
+                         ]
                       ]
-      \/ /\ offer[Id].state = "waiting-webrtc-establish"
+      \/ /\ offer[Id].session[session_id].state = "waiting-webrtc-establish"
          /\ event.contents.webrtc = "established"
-         /\ Assert(offer[Id].peer_mx_id = event.sender, "Implement multisession transfers")
-         /\ offer' = [offer EXCEPT ![Id].state = "uploading"]
+         /\ Assert(offer[Id].session[session_id].peer_mx_id = event.sender, "Something's broken in multisession transfers")
+         /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "uploading"]
          /\ UNCHANGED <<device_to_hs>>
 
-InitValue ==
+InitUploadSession ==
    [ peer_mx_id     |-> 0
    , peer_device_id |-> 0
-   , offer          |-> << Protocol!MakeOfferFile("a", <<0>>)
+   , sent           |-> 0
+   , state          |-> ""
+   ]
+
+InitValue ==
+   [ offer          |-> << Protocol!MakeOfferFile("a", <<0>>)
                          (* , Protocol!MakeOfferFile("b", <<>>) *)
                          , Protocol!MakeOfferFile("c", <<1, 0>>)
                          >>
-   , sent           |-> 0
    , state          |-> IF Id \in CanOffer THEN "send-mxrxtx-offer" ELSE "disabled"
+   , session        |-> [ session_id \in SessionId |-> InitUploadSession ]
    ]
 
 Init ==

@@ -5,6 +5,7 @@ CONSTANT
    DeviceId
  , MxId
  , NumBaseTokens
+ , SessionId
  , FileData
  , FileSize
  , OfferFileSize
