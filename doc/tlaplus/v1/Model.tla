@@ -31,7 +31,7 @@ Liveness ==
 
 Init ==
    /\ HS!Init
-   /\ monitor = [device_id \in DeviceId |-> Device(device_id)!Monitor!InitValue]
+   /\ monitor = [device_id \in DeviceId, msi \in MonitorSessionId |-> Device(device_id)!Monitor!InitValue]
    /\ offer = [device_id \in DeviceId |-> Device(device_id)!Offer!InitValue]
    /\ \A device_id \in DeviceId: Device(device_id)!Init
    /\ InitDeviceHSChannels

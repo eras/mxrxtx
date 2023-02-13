@@ -61,47 +61,50 @@ Monitor ==
    ]
 
 TypeOK ==
-   /\ CheckTRUE(<<Monitor>>, monitor[Id] \in Monitor)
+   /\ CheckTRUE(<<Monitor>>, \A msi \in MonitorSessionId: monitor[<<Id, msi>>] \in Monitor)
 
 ProcessRoomEvent(room_event) ==
-   IF /\ monitor[Id].state = "wait-mxrxtx-offer"
+   \E msi \in MonitorSessionId:
+   IF /\ monitor[<<Id, msi>>].state = "wait-mxrxtx-offer"
    THEN
       /\ monitor' = [monitor EXCEPT
-                      ![Id].offer      = room_event.contents.offer
-                    , ![Id].peer_mx_id = room_event.sender
-                    , ![Id].state      = "has-mxrxtx-offer"
-                    , ![Id].received   = [index \in DOMAIN(room_event.contents.offer) |-> <<>>]
+                      ![<<Id, msi>>].offer      = room_event.contents.offer
+                    , ![<<Id, msi>>].peer_mx_id = room_event.sender
+                    , ![<<Id, msi>>].state      = "has-mxrxtx-offer"
+                    , ![<<Id, msi>>].received   = [index \in DOMAIN(room_event.contents.offer) |-> <<>>]
                     ]
       /\ UNCHANGED<<datachannel, device_to_hs>>
    ELSE
       UNCHANGED<<datachannel, device_to_hs, monitor>>
 
 EstablishSession ==
-   /\ monitor[Id].state = "has-mxrxtx-offer"
+   \E msi \in MonitorSessionId:
+   /\ monitor[<<Id, msi>>].state = "has-mxrxtx-offer"
    /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
-                          , mx_id     |-> monitor[Id].peer_mx_id
+                          , mx_id     |-> monitor[<<Id, msi>>].peer_mx_id
                           , device_id |-> 0
                           , contents  |-> [ message   |-> "WebRTC"
                                           , webrtc    |-> "offer"
                                           , device_id |-> Id ]
                           ])
    /\ monitor' = [monitor EXCEPT
-                   ![Id].state = "sent-webrtc-offer"
+                   ![<<Id, msi>>].state = "sent-webrtc-offer"
                  ]
    /\ UNCHANGED<<datachannel, offer, device, hs_to_device>>
 
-TotalSizeOfReceived ==
-   (* FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[Id].received) *)
-   FoldLeft(LAMBDA b, a: Len(a) + b, 0, monitor[Id].received)
+TotalSizeOfReceived(msi) ==
+   (* FoldSeq(LAMBDA a, b: Len(a) + b, 0, monitor[<<Id, msi>>].received) *)
+   FoldLeft(LAMBDA b, a: Len(a) + b, 0, monitor[<<Id, msi>>].received)
 
 DoDownload ==
-   /\ monitor[Id].state = "downloading"
-   /\ TotalSizeOfReceived < TotalSizeOfOffer(monitor[Id].offer)
+   \E msi \in MonitorSessionId:
+   /\ monitor[<<Id, msi>>].state = "downloading"
+   /\ TotalSizeOfReceived(msi) < TotalSizeOfOffer(monitor[<<Id, msi>>].offer)
    /\ \E peer_device_id \in DeviceId:
       \E message \in DataChannelMessage:
-      /\ peer_device_id = monitor[Id].peer_device_id
+      /\ peer_device_id = monitor[<<Id, msi>>].peer_device_id
       /\ DataChannel!A(peer_device_id, Id, "data")!Recv(message)
-      /\ monitor' = [monitor EXCEPT ![Id].received[CurrentOfferFileIndexOffset(TotalSizeOfReceived, monitor[Id].offer).index] = Append(@, message.data)]
+      /\ monitor' = [monitor EXCEPT ![<<Id, msi>>].received[CurrentOfferFileIndexOffset(TotalSizeOfReceived(msi), monitor[<<Id, msi>>].offer).index] = Append(@, message.data)]
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
 
 ValidateChecksum ==
@@ -109,26 +112,28 @@ ValidateChecksum ==
    TRUE
 
 DoSendAck ==
-   /\ monitor[Id].state = "downloading"
-   /\ TotalSizeOfReceived = TotalSizeOfOffer(monitor[Id].offer)
+   \E msi \in MonitorSessionId:
+   /\ monitor[<<Id, msi>>].state = "downloading"
+   /\ TotalSizeOfReceived(msi) = TotalSizeOfOffer(monitor[<<Id, msi>>].offer)
    /\ \E peer_device_id \in DeviceId:
-      /\ peer_device_id = monitor[Id].peer_device_id
+      /\ peer_device_id = monitor[<<Id, msi>>].peer_device_id
       /\ DataChannel!B(Id, peer_device_id, "data")!Send([ack |-> TRUE])
-      /\ monitor' = [monitor EXCEPT ![Id].state = "complete"]
+      /\ monitor' = [monitor EXCEPT ![<<Id, msi>>].state = "complete"]
       /\ Assert(ValidateChecksum, "Checksum validation failed")
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
 
 ProcessToDeviceEvent(event) ==
-   /\ monitor[Id].state = "sent-webrtc-offer"
-   /\ Assert(event.sender = monitor[Id].peer_mx_id, "Peer mx id is unexpected")
+   \E msi \in MonitorSessionId:
+   /\ monitor[<<Id, msi>>].state = "sent-webrtc-offer"
+   /\ Assert(event.sender = monitor[<<Id, msi>>].peer_mx_id, "Peer mx id is unexpected")
    /\ Assert(event.contents.message = "WebRTC", "Unexpected todevice message")
    /\ Assert(event.contents.webrtc = "answer", "Unexpected todevice message")
    /\ monitor' = [monitor EXCEPT
-                   ![Id].state = "downloading"
-                 , ![Id].peer_device_id = event.contents.device_id
+                   ![<<Id, msi>>].state = "downloading"
+                 , ![<<Id, msi>>].peer_device_id = event.contents.device_id
                  ]
    /\ DeviceToHS(Id)!Send([ message   |-> "ToDevice"
-                          , mx_id     |-> monitor[Id].peer_mx_id
+                          , mx_id     |-> monitor[<<Id, msi>>].peer_mx_id
                           , device_id |-> event.contents.device_id
                           , contents  |-> [ message   |-> "WebRTC"
                                           , webrtc    |-> "established"
@@ -144,8 +149,9 @@ InitValue ==
    , state          |-> IF Id \in CanMonitor THEN "wait-mxrxtx-offer" ELSE "disabled"
    ]
 
+(* Actually initialized in Model!Init *)
 Init ==
-   /\ monitor[Id] = InitValue
+   /\ \A msi \in MonitorSessionId: monitor[<<Id, msi>>] = InitValue
 
 Next ==
    \/ EstablishSession

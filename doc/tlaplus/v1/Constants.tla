@@ -5,6 +5,7 @@ CONSTANT
    InvalidId                    (* invalid id *)
  , DeviceId                     (* device identifiers *)
  , MxId                         (* Matrix Ids *)
+ , MonitorSessionId             (* Id for a session monitor establishes with offer *)
  , NumBaseTokens                (* number of tokens; maximum number of messages *)
  , CanOffer                     (* device ids that can make offers *)
  , CanMonitor                   (* device ids that can monitor *)

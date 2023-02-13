@@ -28,7 +28,8 @@ EventuallyAnOfferIsMade ==
 
 (* Eventually all monitoring nodes have an offer, if there is nothing else the state machine can do *)
 EventuallyMonitorHasOffer ==
-   \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].offer # <<>>))
+   \A device_id \in CanMonitor: <>(AnOfferIsMade ~>
+      <>[](~ENABLED(Next) => \E msi \in MonitorSessionId: monitor[<<device_id, msi>>].offer # <<>>))
 
 EventuallyChannelsAreEmpty ==
    /\ \A device_id \in DeviceId:
@@ -49,25 +50,25 @@ SyncsStartFromBeginning ==
 EventuallyAllMonitorsHaveDownloaded ==
    <> /\ AnOfferIsMade
       /\ \A device_id \in CanMonitor:
-         device[device_id].token.room = 1 ~> (monitor[device_id].state = "complete")
+         device[device_id].token.room = 1 ~> \E msi \in MonitorSessionId: (monitor[<<device_id, msi>>].state = "complete")
 
 (* If every client is syncing from the beginning, then some monitors in the end (on deadlock) will not be in "complete" state *)
 (* Not sure if this works *)
 EventuallyAllMonitorHaveNotDownloaded ==
-   SyncsStartFromBeginning => \E device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ ~(monitor[device_id].state = "complete")))
+   SyncsStartFromBeginning => \E device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ ~(\E msi \in MonitorSessionId: monitor[<<device_id, msi>>].state = "complete")))
 
 NotAllMonitorsAreComplete ==
-   Cardinality({device_id \in CanMonitor: monitor[device_id].state = "complete"}) < Cardinality(CanMonitor)
+   Cardinality({device_id \in CanMonitor: \E msi \in MonitorSessionId: monitor[<<device_id, msi>>].state = "complete"}) < Cardinality(CanMonitor)
 
 OfferHasUploadedDownloads ==
-   \A device_id \in CanOffer: <>[](monitor[device_id].state = "complete" => offer[device_id].state = "complete")
+   \A device_id \in CanOffer: <>[]((\E msi \in MonitorSessionId: monitor[<<device_id, msi>>].state = "complete") => offer[device_id].state = "complete")
 
 DownloadedFilesAreCorrect ==
-   \A monitor_id \in CanMonitor:
-      /\ monitor[monitor_id].state = "complete" =>
+   \A monitor_id \in CanMonitor, msi \in MonitorSessionId:
+      /\ monitor[<<monitor_id, msi>>].state = "complete" =>
          \E offer_id \in CanOffer:
-            /\ offer_id = monitor[monitor_id].peer_device_id
-            /\ monitor[monitor_id].received =
+            /\ offer_id = monitor[<<monitor_id, msi>>].peer_device_id
+            /\ monitor[<<monitor_id, msi>>].received =
                   [index \in DOMAIN(offer[offer_id].offer) |->
                    offer[offer_id].offer[index].checksum[2]]
 
