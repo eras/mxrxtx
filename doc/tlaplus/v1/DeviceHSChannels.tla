@@ -4,7 +4,7 @@
 CONSTANT
    DeviceId
  , MxId
- , NumBaseTokens
+ , NumBaseSyncTokens
  , SessionId
  , FileData
  , FileSize

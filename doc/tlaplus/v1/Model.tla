@@ -58,7 +58,7 @@ AllMessages ==
 State ==
    [ server |-> <<[room |-> Len(hs_room),
                    todevice |-> [device_id \in DeviceId |-> hs_todevice[device_id]],
-                   syncing |-> [device_id \in {device_id \in DeviceId: hs_device_sync_token[device_id] # NoToken} |->
+                   syncing |-> [device_id \in {device_id \in DeviceId: hs_device_sync_token[device_id] # NoSyncToken} |->
                                 hs_device_sync_token[device_id]]]>>
    , device |-> [id \in DeviceId |-> Device(id)!State]
    ]

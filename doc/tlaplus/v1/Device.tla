@@ -324,7 +324,7 @@ Type ==
    [logged_in : LoginState,
     syncing   : BOOLEAN,
     offering  : BOOLEAN,
-    token     : Token]
+    token     : SyncToken]
 
 TypeOK ==
    /\ CheckTRUE("Device", Self \in Type)
@@ -340,7 +340,7 @@ InitValue ==
    [logged_in |-> "no",
     syncing   |-> FALSE,
     offering  |-> FALSE,
-    token     |-> NoToken]
+    token     |-> NoSyncToken]
 
 Login1 ==
    /\ Self.logged_in = "no"

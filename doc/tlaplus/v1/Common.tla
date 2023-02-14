@@ -7,20 +7,22 @@ LOCAL INSTANCE Util
 CONSTANT
    DeviceId
  , MxId
- , NumBaseTokens
+ , NumBaseSyncTokens
  , FileData
  , FileSize
 
-NoToken == [room |-> 0, dm |-> 0]
-Token   ==
+NoSyncToken == [room |-> 0, dm |-> 0]
+SyncToken   ==
   UNION {
-    {NoToken}
-  , [ room     : (1..NumBaseTokens)
-    , todevice : (1..NumBaseTokens)]
+    {NoSyncToken}
+  , [ room     : (1..NumBaseSyncTokens) (* The index of the first non-received room message *)
+    , todevice : (1..NumBaseSyncTokens)] (* The index of the first non-received device message *)
   }
 
+(* Checksums are simply <<"CK", <<contents..>>>> *)
 Checksum == {"CK"} \X SeqsOfLength(FileData, FileSize)
 
+(* Currently we only have one data channel per a device pair per direction *)
 DataChannelLabel == {"data"}
 
 (* Identifiers for datachannels *)

@@ -16,9 +16,9 @@ HSDeviceMxId == UNION {
      MxId
    }
 
-HSDeviceSyncToken == UNION {
-     {NoToken},         (* NoToken means this device is not syncing *)
-     Token
+HSDeviceSyncSyncToken == UNION {
+     {NoSyncToken},         (* NoSyncToken means this device is not syncing *)
+     SyncToken
    }
 
 HSRoomMessage ==
@@ -31,11 +31,11 @@ HSToDeviceMessage ==
 
 IsDeviceLoggedIn(device_id) == hs_device_mx_id[device_id] # InvalidId
 
-IsDeviceSyncing(device_id) == hs_device_sync_token[device_id] # NoToken
+IsDeviceSyncing(device_id) == hs_device_sync_token[device_id] # NoSyncToken
 
 TypeOK ==
    /\ CheckTRUE("hs_device_mx_id", \A device_id \in DeviceId: hs_device_mx_id[device_id] \in HSDeviceMxId)
-   /\ CheckTRUE("hs_device_sync_token", \A device_id \in DeviceId: hs_device_sync_token[device_id] \in HSDeviceSyncToken)
+   /\ CheckTRUE("hs_device_sync_token", \A device_id \in DeviceId: hs_device_sync_token[device_id] \in HSDeviceSyncSyncToken)
    /\ CheckTRUE("hs_todevice", \A device_id \in DeviceId: \A message_id \in DOMAIN(hs_todevice[device_id]): hs_todevice[device_id][message_id] \in UNION {HSToDeviceMessage, [synced: {{}}]})
    /\ CheckTRUE("hs_room", \A message_id \in DOMAIN(hs_room): hs_room[message_id] \in HSRoomMessage)
 
@@ -43,7 +43,7 @@ Init ==
    /\ hs_room = <<>>
    /\ hs_todevice = [device_id \in DeviceId |-> <<>>]
    /\ hs_device_mx_id = [device_id \in DeviceId |-> InvalidId]
-   /\ hs_device_sync_token = [device_id \in DeviceId |-> NoToken]
+   /\ hs_device_sync_token = [device_id \in DeviceId |-> NoSyncToken]
 
 ProcessLogin ==
    \E device_id \in DeviceId:
@@ -62,7 +62,7 @@ ProcessSync ==
    LET event == DeviceToHS(device_id)!Get IN
    /\ DeviceToHS(device_id)!Discard
    /\ event.message = "Sync"
-   /\ Assert(hs_device_sync_token[device_id] = NoToken, <<"Device", device_id, "tried to sync while it was already syncing">>)
+   /\ Assert(hs_device_sync_token[device_id] = NoSyncToken, <<"Device", device_id, "tried to sync while it was already syncing">>)
    /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = event.contents]
    /\ UNCHANGED<<hs_to_device, hs_room, hs_todevice, hs_device_mx_id>>
 
@@ -93,22 +93,22 @@ ProcessToDevice ==
 
 SendSyncResponses ==
    \E device_id \in DeviceId:
-   LET token == Check(Token, hs_device_sync_token[device_id]) IN
-   /\ token # NoToken
+   LET token == Check(SyncToken, hs_device_sync_token[device_id]) IN
+   /\ token # NoSyncToken
    /\ \/ Len(hs_room) >= token.room
       \/ Len(hs_todevice[device_id]) >= token.todevice
-   /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = NoToken]
+   /\ hs_device_sync_token' = [hs_device_sync_token EXCEPT ![device_id] = NoSyncToken]
    /\ IF Len(hs_room) >= token.room THEN
          /\ HSToDevice(device_id)!Send([message  |-> "RoomMessage",
                                         sender   |-> hs_room[token.room].sender,
                                         contents |-> hs_room[token.room].contents,
-                                        token    |-> Check(Token, [token EXCEPT !.room = @ + 1])])
+                                        token    |-> Check(SyncToken, [token EXCEPT !.room = @ + 1])])
          /\ UNCHANGED<<hs_todevice>>
       ELSE
          /\ HSToDevice(device_id)!Send([message  |-> "ToDevice",
                                         sender   |-> hs_todevice[device_id][token.todevice].sender,
                                         contents |-> hs_todevice[device_id][token.todevice].contents,
-                                        token    |-> Check(Token, [token EXCEPT !.todevice = @ + 1])])
+                                        token    |-> Check(SyncToken, [token EXCEPT !.todevice = @ + 1])])
          (* easier to see synced messages.. *)
          /\ hs_todevice' = [hs_todevice EXCEPT ![device_id][token.todevice] = [synced |-> {}]]
    /\ UNCHANGED<<hs_device_mx_id, device_to_hs, hs_room>>

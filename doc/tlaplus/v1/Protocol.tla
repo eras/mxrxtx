@@ -5,7 +5,7 @@ CONSTANT
    DeviceId
  , MxId
  , SessionId
- , NumBaseTokens
+ , NumBaseSyncTokens
  , FileData
  , FileSize
  , OfferFileSize
@@ -58,7 +58,7 @@ RoomMessage ==
 (* Request sync *)
 Sync ==
    [ message  : {"Sync"}
-   , contents : Token]
+   , contents : SyncToken]
 
 (* Send a message to a device *)
 ToDeviceContentsWebRTC ==
@@ -88,19 +88,19 @@ DeviceToHSMessages == UNION {
 (* Messages homeserver can send to device *)
 LoginOK ==
    [ message  : {"LoginOK"}
-   , token    : Token]
+   , token    : SyncToken]
 
 RoomEvent ==
    [ message  : {"RoomMessage"}
    , sender   : MxId
    , contents : RoomMessageContents
-   , token    : Token]
+   , token    : SyncToken]
 
 ToDeviceEvent ==
    [ message  : {"ToDevice"}
    , sender   : MxId
    , contents : ToDeviceContents
-   , token    : Token]
+   , token    : SyncToken]
 
 HSToDeviceMessages == UNION {
       LoginOK
