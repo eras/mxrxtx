@@ -1,15 +1,6 @@
 ---- MODULE DeviceHSChannels ---------------------------------------------------
-(* Documentation *)
+EXTENDS Constants
 --------------------------------------------------------------------------------
-CONSTANT
-   DeviceId
- , MxId
- , NumBaseSyncTokens
- , SessionId
- , FileData
- , FileSize
- , OfferFileSize
- , NumOfferFiles
 
 VARIABLES
    device_to_hs

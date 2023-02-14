@@ -39,6 +39,7 @@ Init ==
 
 Spec == Init /\ [][Next]_all_vars /\ Liveness
 
+(* Useful messages we want to visualize with TLSD *)
 AllMessages ==
    UNION {
       UNION {
@@ -55,6 +56,7 @@ AllMessages ==
       }
    }
 
+(* Useful state we want to visualize with TLSD *)
 State ==
    [ server |-> <<[room |-> Len(hs_room),
                    todevice |-> [device_id \in DeviceId |-> hs_todevice[device_id]],
@@ -63,6 +65,7 @@ State ==
    , device |-> [id \in DeviceId |-> Device(id)!State]
    ]
 
+(* Useful data we want to visualize with TLSD *)
 AliasMessages ==
    [
      (* lane_order_json |-> ToJson(<<"client", "server">>) *)

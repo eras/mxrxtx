@@ -6,7 +6,7 @@
    The state is stored in the channels function. Channels maps via Id to the
    actual channels.
 
-   Copyright 2022 Erkki Seppälä <erkki.seppala@vincit.fi>
+   Copyright 2022-2023 Erkki Seppälä <erkki.seppala@vincit.fi>
 *)
 
 ----------------------------------------------------------------------------
@@ -20,6 +20,8 @@ VARIABLE channels               (* A function of channels: [Id -> Channel] *)
 (* When a channel is not busy, it has this value. *)
 Null == <<>>
 
+ASSUME Null \notin Data
+
 TypeOK == channels[Id] \in (Data \cup {Null})
 
 Busy ==
@@ -28,20 +30,26 @@ Busy ==
 Send(data) ==
    /\ \lnot Busy
    /\ channels' = [channels EXCEPT ![Id] = data]
+   (* This is commented out due to performance reasons *)
    (* /\ Assert(data \in Data, <<"Sending invalid data", data, "while expecting", Data>>) *)
 
 Recv(data) ==
    /\ Busy
    /\ data = channels[Id]
    /\ channels' = [channels EXCEPT ![Id] = Null]
+   (* This is commented out due to performance reasons *)
    (* /\ Assert(data \in Data, <<"Receiving invalid data", data, "while expecting", Data>>) *)
 
+(* Faster interface for retrieving data from a channel. The value is useful only if the
+   channel is not Busy *)
 Get == channels[Id]
 
+(* Discards the latest message from a busy channel *)
 Discard ==
    /\ Busy
    /\ channels' = [channels EXCEPT ![Id] = Null]
 
+(* Used with TLSD *)
 Sending ==
    IF Busy
    THEN {channels[Id]}

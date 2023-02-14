@@ -56,6 +56,7 @@ the state store and maybe weed out those hackers from the homeserver..
 
 ## Features
 
+- Has a [formal specification](doc/tlaplus) specified in TLA+
 - Available for Linux and Windows
 - Setup mode easy configuration; supports single sign-on
 - Offer can contain multiple files and directories

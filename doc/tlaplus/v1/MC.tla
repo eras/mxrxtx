@@ -30,6 +30,7 @@ EventuallyAnOfferIsMade ==
 EventuallyMonitorHasOffer ==
    \A device_id \in CanMonitor: <>(AnOfferIsMade ~> <>[](~ENABLED(Next) => monitor[device_id].offer # <<>>))
 
+(* Eventually it will always be the case that if there is no next state, all channels will be empty *)
 EventuallyChannelsAreEmpty ==
    /\ \A device_id \in DeviceId:
          <>[](~ENABLED(Next) =>
@@ -39,8 +40,11 @@ EventuallyChannelsAreEmpty ==
          <>[](~ENABLED(Next) =>
               datachannel[data_channel_id] = <<>>)
 
+(* Used as a negative property for getting traces *)
 EventuallyChannelsAreNotEmpty == ~EventuallyChannelsAreEmpty
 
+(* Eventually it is the case that offers offers will be complete, if the offer has been sent
+   and all monitors are syncing starting from the first message of the room *)
 EventuallyAllOffersComplete ==
    \A device_id_ofr \in CanOffer:
       <>[](
@@ -63,16 +67,16 @@ EventuallyAllMonitorsHaveDownloaded ==
          device[device_id].token.room = 1 ~> (monitor[device_id].state = "complete")
 
 (* If every client is syncing from the beginning, then some monitors in the end (on deadlock) will not be in "complete" state *)
-(* Not sure if this works *)
-EventuallyAllMonitorHaveNotDownloaded ==
+(* Not sure if this works.. *)
+EventuallyAllMonitorsHaveNotDownloaded ==
    SyncsStartFromBeginning => \E device_id \in CanMonitor: <>(AnOfferIsMade ~> (ENABLED(Next) \/ ~(monitor[device_id].state = "complete")))
 
+(* Used for getting traces: there will be monitors that will not complete *)
 NotAllMonitorsAreComplete ==
    Cardinality({device_id \in CanMonitor: monitor[device_id].state = "complete"}) < Cardinality(CanMonitor)
 
-OfferHasUploadedDownloads ==
-   \A device_id \in CanOffer: <>[](monitor[device_id].state = "complete" => offer[device_id].state = "complete")
-
+(* For each monitor that is complete the offer with the same peer_device_id has the same content (in its data
+   portion of the checksum) *)
 DownloadedFilesAreCorrect ==
    \A monitor_id \in CanMonitor:
       /\ monitor[monitor_id].state = "complete" =>

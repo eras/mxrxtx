@@ -1,6 +1,26 @@
 ---- MODULE HS -----------------------------------------------------------------
+(*
+  Homeserver has two kinds of ways to pass messages: rooms and ToDevice events.  To keep track of
+  which events have been sent to clients there are two variables:
+
+   - hs_room that contains the list of all messages sent to the one room
+   - hs_todevice[DeviceId] that contains the list of ToDevice messages not received by a Device
+
+  SyncToken contains the index which indicates which message the device has not yet seen; e.g. value
+  [ room: 1 ] indicates that the device has not seen any messages in the room and once there is a
+  message at index 1, it will be delivered to the device when the device is syncing. These syncing
+  tokens are tracked by the variable hs_device_sync_token which is updated with the sync token when
+  a Sync request comes in and similarly reset when a sync response is sent out.
+
+  Sync mesages are handled similarly with ToDevice events, except in that case there is a
+  separate entry in hs_todevice for each Device. When a ToDevice message is received by HS
+  it will add the message either to the hs_todevice[DeviceId] for the device, or in case of
+  sending a message to device id 0 = all devices, it will be put to all the devices shared
+  by the same MxId.
+
+*)
+
 EXTENDS Base
-(* Documentation *)
 --------------------------------------------------------------------------------
 
 LOCAL INSTANCE TLC
