@@ -8,3 +8,8 @@ mxrxtx.ini
 ext
 doc/tlaplus/v1/states/*
 doc/tlaplus/v1/trace/*
+doc/tlaplus/v1/MC_*
+doc/tlaplus/v1/*.dot
+doc/tlaplus/v1/*.pdf
+doc/tlaplus/v1/*.svg
+doc/tlaplus/v1/tlsd.output
