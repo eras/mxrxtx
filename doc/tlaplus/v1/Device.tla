@@ -118,9 +118,14 @@ DoDownload ==
       /\ monitor' = [monitor EXCEPT ![Id].received[CurrentOfferFileIndexOffset(TotalSizeOfReceived, monitor[Id].offer).index] = Append(@, message.data)]
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
 
+(* TRUE iff downloaded file contents match the checksum of the offer *)
 ValidateChecksum ==
-   (* TODO *)
-   TRUE
+   FoldLeft(LAMBDA ok, index:
+              /\ ok
+              /\ monitor[Id].offer[index].checksum = <<"CK", monitor[Id].received[index] >>
+           , TRUE
+           , [n \in 1..Len(monitor[Id].received) |-> n]
+           )
 
 DoSendAck ==
    /\ monitor[Id].state = "downloading"
