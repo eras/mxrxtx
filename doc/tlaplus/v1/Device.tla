@@ -127,7 +127,7 @@ DoSendAck ==
    /\ TotalSizeOfReceived = TotalSizeOfOffer(monitor[Id].offer)
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = monitor[Id].peer_device_id
-      /\ DataChannel!B(Id, peer_device_id, "data")!Send([ack |-> TRUE])
+      /\ DataChannel!A(Id, peer_device_id, "data")!Send([ack |-> TRUE])
       /\ monitor' = [monitor EXCEPT ![Id].state = "complete"]
       /\ Assert(ValidateChecksum, "Checksum validation failed")
       /\ UNCHANGED<<offer, device, hs_to_device, device_to_hs>>
@@ -244,7 +244,7 @@ DoWaitAck ==
    /\ TotalSizeOfSent(session_id) = TotalSizeOfOffer(offer[Id].offer)
    /\ \E peer_device_id \in DeviceId:
       /\ peer_device_id = offer[Id].session[session_id].peer_device_id
-      /\ DataChannel!B(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
+      /\ DataChannel!A(peer_device_id, Id, "data")!Recv([ack |-> TRUE])
       /\ offer' = [offer EXCEPT ![Id].session[session_id].state = "complete"]
       /\ UNCHANGED<<monitor, device, hs_to_device, device_to_hs>>
 
